@@ -1,0 +1,748 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Elastic Sphere</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(85,85,85);
+}
+#example {
+  width: 600px;
+  height: 600px;
+}
+#controls {
+  color: white;
+  position: absolute;
+  top: 10px;
+  left: 610px;
+  width: 300px;
+}
+#text {
+  color: white;
+  position: absolute;
+  top: 610px;
+  left: 10px;
+  width: 910px;
+}
+</style>
+<script id="shader-vs" type="x-shader/x-vertex"> 
+  precision mediump float;
+  attribute vec2 aTexCoord;
+  attribute vec4 adjCoords12;
+  attribute vec4 adjCoords34;
+  attribute vec4 adjCoords56;
+  attribute float area;
+  attribute vec3 adjWeights123;
+  attribute vec3 adjWeights456;
+  uniform sampler2D samp;
+  uniform float damping;
+  uniform float speed;
+  varying vec4 vc;
+void main(void) {
+   gl_Position = vec4(-1.+2.*aTexCoord.x, -1.+2.*aTexCoord.y, 0., 1.);
+   vec4 v0 = texture2D(samp, aTexCoord.xy);
+   vec4 v1 = texture2D(samp, adjCoords12.xy);
+   vec4 v2 = texture2D(samp, adjCoords12.zw);
+   vec4 v3 = texture2D(samp, adjCoords34.xy);
+   vec4 v4 = texture2D(samp, adjCoords34.zw);
+   vec4 v5 = texture2D(samp, adjCoords56.xy);
+   vec4 v6 = texture2D(samp, adjCoords56.zw);
+   float dv = adjWeights123.x*(v1.x-v0.x)+adjWeights123.y*(v2.x-v0.x)+adjWeights123.z*(v3.x-v0.x)+adjWeights456.x*(v4.x-v0.x)+
+              adjWeights456.y*(v5.x-v0.x)+adjWeights456.z*(v6.x-v0.x);
+   float velocity = (1.0-speed*damping)*v0.y+(0.02*dv/area)*speed;
+   vc = vec4(v0.x+0.005*velocity*speed,velocity,0.,1.);
+   gl_PointSize = 1.; 
+}
+</script> 
+
+<script id="shader-fs" type="x-shader/x-fragment"> 
+precision mediump                    float;																																	
+  varying vec4 vc;
+void main(void) {
+   gl_FragColor = vc;
+}
+</script> 
+ 
+<script id="shader-vs-show" type="x-shader/x-vertex"> 
+precision mediump float;
+    uniform mat4 u_modelViewProjMatrix;
+    uniform mat3 modelViewMatrix;
+    uniform sampler2D samp;
+    uniform vec3 basecolor;
+    uniform float shininess;
+
+    attribute vec2 aTexCoord;
+    attribute vec4 adjCoords12;
+    attribute vec4 adjCoords34;
+    attribute vec4 adjCoords56;
+    attribute vec3 adjVertexPosition1;
+    attribute vec3 adjVertexPosition2;
+    attribute vec3 adjVertexPosition3;
+    attribute vec3 adjVertexPosition4;
+    attribute vec3 adjVertexPosition5;
+    attribute vec3 adjVertexPosition6;
+    attribute vec3 aVertexPosition;
+
+    varying vec3 vc;
+    varying vec3 vn;
+    varying vec3 vp;
+    varying float val;
+    const vec3 z = vec3(0.0,0.0,0.0);
+
+    void main()
+    {
+        float aVertexValue = texture2D(samp, vec2(aTexCoord.x, aTexCoord.y)).x;
+	vp = aVertexValue*aVertexPosition;
+        gl_Position = u_modelViewProjMatrix * vec4(vp, 1.0);
+        vec3 vpos[6];
+        vpos[0] = adjVertexPosition1*(texture2D(samp, adjCoords12.xy).x)-vp;
+        vpos[1] = adjVertexPosition2*(texture2D(samp, adjCoords12.zw).x)-vp;
+	vpos[2] = adjVertexPosition3*(texture2D(samp, adjCoords34.xy).x)-vp;
+        vpos[3] = adjVertexPosition4*(texture2D(samp, adjCoords34.zw).x)-vp;
+        vpos[4] = adjVertexPosition5*(texture2D(samp, adjCoords56.xy).x)-vp;
+        vpos[5] = adjVertexPosition6*(texture2D(samp, adjCoords56.zw).x)-vp;
+	vec3 n1 = cross(vpos[0],vpos[1]);
+	n1 = n1+cross(vpos[1],vpos[2]); 
+	n1 = n1+cross(vpos[2],vpos[3]);
+	n1 = n1+cross(vpos[3],vpos[4]);
+	if (adjVertexPosition6 == z) {
+		n1 = n1+cross(vpos[4],vpos[0]);
+	} else {
+		n1 = n1+cross(vpos[4],vpos[5]);
+		n1 = n1+cross(vpos[5],vpos[0]);
+	}
+	vn = modelViewMatrix*n1;
+	vc = clamp((aVertexValue*0.8-1.0)*basecolor.yzx+0.3*basecolor.xyz+(2.0-aVertexValue*1.6)*basecolor.zxy,0.0,2.0);
+    }
+</script> 
+ 
+<script id="shader-fs-show" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec3 vc;
+    varying vec3 vn;
+    varying vec3 vp; 
+    uniform vec3 basecolor;
+    uniform float shininess;
+
+    void main()
+    {
+	if (shininess != 0.) {
+	vec3 vnormal = normalize(vn);
+	vec3 vpos = normalize(-vp+vec3(0.0,0.0,5.0));
+	vec3 rm = normalize(2.0*vnormal.z*vnormal-vec3(0.0,0.0,1.0));
+	float val = clamp(dot(rm,vpos),0.0,1.0);
+	val = val*val;
+	val = val*val;
+	val = val*val;
+	val = val*val*shininess*0.3;
+        gl_FragColor = vec4(clamp(vnormal.z,0.0,1.0)*vc+0.1*basecolor+vec3(val,val,val),1.0);
+	} else {
+	vec3 vnormal = normalize(vn);
+	gl_FragColor = vec4(clamp(vnormal.z,0.0,1.0)*vc+0.1*basecolor,1.0);	
+	}
+    }
+</script> 
+
+<script src="mesh_large.js"></script>
+<script>
+var gl;
+var curRotQ = [1.0,0.0,0.0,0.0];
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+    //quaternion multiplication
+    function qMultiply(q1, q2) {
+	return [q1[0]*q2[0]-q1[1]*q2[1]-q1[2]*q2[2]-q1[3]*q2[3],
+		q1[0]*q2[1]+q1[1]*q2[0]+q1[2]*q2[3]-q1[3]*q2[2],
+		q1[0]*q2[2]-q1[1]*q2[3]+q1[2]*q2[0]+q1[3]*q2[1],
+		q1[0]*q2[3]+q1[1]*q2[2]-q1[2]*q2[1]+q1[3]*q2[0]];
+    }
+
+    //quaternion normalization
+    function qNormalize(q) {
+	var norm = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
+	if (norm != 0) return [q[0]/norm, q[1]/norm, q[2]/norm, q[3]/norm];
+	else return q;
+    }
+
+    var indexBuffer, numPts, drawLength, rotMatrix, projectionMatrix, modelviewMatrix;
+    var err = "Your browser does not support ";
+
+   var gl, canvas,
+    prog, prog_show, texture, texture1, FBO, FBO1, samp, samp_show,
+    mvpMatrixLoc, mvMatrixLoc, basecolorLoc,
+    m = 64, offset = 1.0/128.0, dampingLoc, speedLoc, shininessLoc, pointsBuffer;
+ 
+   var pix = new Float32Array(3*m*m);
+
+    function initShaders() {
+	projectionMatrix = new J3DIMatrix4();
+    	modelviewMatrix = new J3DIMatrix4();
+	rotMatrix = new J3DIMatrix4();
+	numPts = pointsdict.length/3;
+        drawLength = trianglearray.length;
+        prog  = gl.createProgram();
+        gl.bindAttribLocation(prog, 0, "aTexCoord");
+        gl.bindAttribLocation(prog, 1, "adjCoords12");
+        gl.bindAttribLocation(prog, 2, "adjCoords34");
+        gl.bindAttribLocation(prog, 3, "adjCoords56");
+        gl.bindAttribLocation(prog, 4, "area");
+        gl.bindAttribLocation(prog, 5, "adjWeights123");
+        gl.bindAttribLocation(prog, 6, "adjWeights456");
+        gl.attachShader(prog, getShader( gl, "shader-vs" ));
+        gl.attachShader(prog, getShader( gl, "shader-fs" ));
+        gl.linkProgram(prog);
+
+   gl.useProgram(prog);
+   gl.enableVertexAttribArray(0);
+   var coords = [];
+   for (i = 0; i < numPts; i++) coords.push.apply(coords, getTexCoords(i));
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coords), gl.STATIC_DRAW);
+   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+   var adjc = [];
+   for (i = 0; i < numPts; i++) {
+	var q = edgedict[i];
+        if (q.length == 5) { 
+          for (j = 0; j < 5; j++) adjc.push.apply(adjc, getTexCoords(q[j]));
+          adjc.push.apply(adjc, [0.0,0.0]);
+	} else { for (j = 0; j < 6; j++) adjc.push.apply(adjc, getTexCoords(q[j])); }
+   }
+   var adjcoords = new Float32Array(adjc);
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, adjcoords, gl.STATIC_DRAW);
+   gl.enableVertexAttribArray(1);
+   gl.enableVertexAttribArray(2);
+   gl.enableVertexAttribArray(3);
+   gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 12*4, 0);
+   gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 12*4, 4*4);
+   gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 12*4, 8*4);
+   
+   gl.enableVertexAttribArray(4);
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(areadict), gl.STATIC_DRAW);
+   gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 0, 0);
+   
+   gl.enableVertexAttribArray(5);
+   gl.enableVertexAttribArray(6);
+   var weights = [];
+   for (i = 0; i < numPts; i++) {
+	var q = weightdict[i];
+        if (q.length == 5) weights.push.apply(weights, [q[0], q[1], q[2], q[3], q[4], 0.0]);
+        else weights.push.apply(weights, [q[0], q[1], q[2], q[3], q[4], q[5]]);
+   }
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(weights), gl.STATIC_DRAW);
+   gl.vertexAttribPointer(5, 3, gl.FLOAT, false, 6*4, 0);
+   gl.vertexAttribPointer(6, 3, gl.FLOAT, false, 6*4, 3*4);
+
+   var pointcoords = [];
+   pointsBuffer = gl.createBuffer();
+   pointcoords = new Uint16Array(numPts);
+   for (i = 0; i< numPts; i++) pointcoords[i] = i;
+   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pointsBuffer);
+   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, pointcoords, gl.STATIC_DRAW);
+
+   dampingLoc = gl.getUniformLocation(prog, "damping");
+   gl.uniform1f(dampingLoc, 0.0);
+   speedLoc = gl.getUniformLocation(prog, "speed");
+   gl.uniform1f(speedLoc, 0.4);
+
+   var ext = gl.getExtension("OES_texture_float");
+   if ( !ext ) {alert(err + "OES_texture_float extension"); return;}
+   if (gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) == 0){
+     alert(err + "Vertex texture"); return;}
+   
+   texture1 = gl.createTexture();
+   texture = gl.createTexture();
+   FBO = gl.createFramebuffer();
+   FBO1 = gl.createFramebuffer();
+
+   samp = gl.getUniformLocation(prog, "samp");
+
+   prog_show  = gl.createProgram();
+   gl.bindAttribLocation(prog_show, 0, "aTexCoord");
+   gl.bindAttribLocation(prog_show, 1, "adjCoords12");
+   gl.bindAttribLocation(prog_show, 2, "adjCoords34");
+   gl.bindAttribLocation(prog_show, 3, "adjCoords56");
+   gl.bindAttribLocation(prog_show, 7, "adjVertexPosition1");
+   gl.bindAttribLocation(prog_show, 8, "adjVertexPosition2");
+   gl.bindAttribLocation(prog_show, 9, "adjVertexPosition3");
+   gl.bindAttribLocation(prog_show, 10, "adjVertexPosition4");
+   gl.bindAttribLocation(prog_show, 11, "adjVertexPosition5");
+   gl.bindAttribLocation(prog_show, 12, "adjVertexPosition6");
+   gl.bindAttribLocation(prog_show, 13, "aVertexPosition"); 
+   gl.attachShader(prog_show, getShader( gl, "shader-vs-show" ));
+   gl.attachShader(prog_show, getShader( gl, "shader-fs-show" ));
+   gl.linkProgram(prog_show);
+   gl.useProgram(prog_show);
+
+   gl.enableVertexAttribArray(13);
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pointsdict), gl.STATIC_DRAW);
+   gl.vertexAttribPointer(13, 3, gl.FLOAT, false, 0, 0);
+   
+   var parr = [];
+   for (i = 0; i<edgedict.length; i++) {
+	a = edgedict[i];	
+	parr.push.apply(parr,[pointsdict[3*a[0]],pointsdict[3*a[0]+1],
+	pointsdict[3*a[0]+2]]); 
+	parr.push.apply(parr,[pointsdict[3*a[1]],pointsdict[3*a[1]+1],
+	pointsdict[3*a[1]+2]]);
+	parr.push.apply(parr,[pointsdict[3*a[2]],pointsdict[3*a[2]+1],
+	pointsdict[3*a[2]+2]]);
+	parr.push.apply(parr,[pointsdict[3*a[3]],pointsdict[3*a[3]+1],
+	pointsdict[3*a[3]+2]]);
+	parr.push.apply(parr,[pointsdict[3*a[4]],pointsdict[3*a[4]+1],
+	pointsdict[3*a[4]+2]]);
+	if (a.length == 5) parr.push.apply(parr,[0.0,0.0,0.0]);
+	else parr.push.apply(parr,[pointsdict[3*a[5]],pointsdict[3*a[5]+1],
+	pointsdict[3*a[5]+2]]);
+   }
+   gl.enableVertexAttribArray(7);
+   gl.enableVertexAttribArray(8);
+   gl.enableVertexAttribArray(9);
+   gl.enableVertexAttribArray(10);
+   gl.enableVertexAttribArray(11);
+   gl.enableVertexAttribArray(12);
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(parr), gl.STATIC_DRAW);
+   gl.vertexAttribPointer(7, 3, gl.FLOAT, false, 3*6*4, 0);
+   gl.vertexAttribPointer(8, 3, gl.FLOAT, false, 3*6*4, 3*4);
+   gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 3*6*4, 6*4);
+   gl.vertexAttribPointer(10, 3, gl.FLOAT, false, 3*6*4, 9*4);
+   gl.vertexAttribPointer(11, 3, gl.FLOAT, false, 3*6*4, 12*4);
+   gl.vertexAttribPointer(12, 3, gl.FLOAT, false, 3*6*4, 15*4);
+
+   indexBuffer = gl.createBuffer();
+   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(trianglearray), gl.STATIC_DRAW);
+   gl.uniform1i(gl.getUniformLocation(prog_show, "samp"), 0);
+   mvpMatrixLoc = gl.getUniformLocation(prog_show, "u_modelViewProjMatrix");
+   mvMatrixLoc = gl.getUniformLocation(prog_show, "modelViewMatrix");
+   basecolorLoc = gl.getUniformLocation(prog_show, "basecolor");
+   shininessLoc = gl.getUniformLocation(prog_show, "shininess");
+   gl.uniform3f(basecolorLoc, 0.0, 1.0, 0.0);
+   gl.uniform1f(shininessLoc, 0.0);
+   gl.clearColor(0,0,0,1);
+   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+   initialized = true;
+   loadInitialValues("classic",1);
+    }
+
+   function getTexCoords(i) {
+	return [(i%m)/m+offset, Math.floor(i/m)/m+offset];    
+   }
+
+    function loadInitialValues(type, jitter) {
+	if (initialized) {	
+	var randvals = [];
+	curRotQ = [1.0, 0.0, 0.0, 0.0];
+        if (type=="classic") {
+	for (i = 0; i<7; i++) randvals.push(Math.floor(Math.random()*numPts));
+	for (i = 0; i< numPts; i++) {
+		var val = 0;
+		for (j = 0; j < 7; j++) {
+			val += 1/(Math.pow(1.5*pointsdict[3*randvals[j]]-pointsdict[3*i],2)+
+				Math.pow(1.5*pointsdict[3*randvals[j]+1]-pointsdict[3*i+1],2)+
+				Math.pow(1.5*pointsdict[3*randvals[j]+2]-pointsdict[3*i+2],2));	
+		} 
+		pix[3*i] = 0.5+val/5+jitter*Math.random()/40;
+                pix[3*i+1] = 0;
+		} 
+        } else if (type=="pulse") {
+                var k = Math.floor(Math.random()*numPts);
+	        for (i = 0; i< numPts; i++) {
+		var val = 1/(Math.pow(1.2*pointsdict[3*k]-pointsdict[3*i],2)+
+				Math.pow(1.2*pointsdict[3*k+1]-pointsdict[3*i+1],2)+
+				Math.pow(1.2*pointsdict[3*k+2]-pointsdict[3*i+2],2));	
+		pix[3*i] = 1.0+val/20+jitter*Math.random()/40;
+                pix[3*i+1] = 0;
+		}
+        } else if (type=="doublepulse") {
+                for (i = 0; i<2; i++) randvals.push(Math.floor(Math.random()*numPts));
+	        for (i = 0; i< numPts; i++) {
+		var val = 0;
+		for (j = 0; j < 2; j++) {
+			val += 1/(Math.pow(1.2*pointsdict[3*randvals[j]]-pointsdict[3*i],2)+
+				Math.pow(1.2*pointsdict[3*randvals[j]+1]-pointsdict[3*i+1],2)+
+				Math.pow(1.2*pointsdict[3*randvals[j]+2]-pointsdict[3*i+2],2));	
+		} 
+		pix[3*i] = 1.0+val/20+jitter*Math.random()/40;
+                pix[3*i+1] = 0;
+		}
+        } else if (type=="ml24") {
+               for (i = 0; i< numPts; i++) {
+               pix[3*i] = 1.5*(7*pointsdict[3*i]*pointsdict[3*i]-1)*
+               (pointsdict[3*i+1]*pointsdict[3*i+1]-pointsdict[3*i+2]*pointsdict[3*i+2]);
+               pix[3*i+1] = 0;
+		}	
+	} else if (type=="ml04") {
+		for (i = 0; i< numPts; i++) {
+                var sq = pointsdict[3*i]*pointsdict[3*i];
+       		pix[3*i] = (35*sq*sq-30*sq+3)/4;
+                pix[3*i+1] = 0;
+		}
+        } else if (type=="ml12") {
+                for (i = 0; i< numPts; i++) {
+       		pix[3*i] = 3*pointsdict[3*i]*pointsdict[3*i+1];
+                pix[3*i+1] = 0;
+		}
+        } else if (type=="ml02") {
+		for (i = 0; i< numPts; i++) {
+		pix[3*i] = 2*pointsdict[3*i]*pointsdict[3*i]-pointsdict[3*i+1]*pointsdict[3*i+1]-pointsdict[3*i+2]*pointsdict[3*i+2];
+		pix[3*i+1] = 0;
+		}	
+	} else if (type=="ml14") {
+		for (i = 0; i < numPts; i++) {
+		pix[3*i] = 1.5*pointsdict[3*i]*pointsdict[3*i+1]*(7*pointsdict[3*i]*
+		pointsdict[3*i]-3);
+		pix[3*i+1] = 0;
+		}
+	} else if (type=="ml34") {
+		for (i = 0; i< numPts; i++) {
+		pix[3*i] = 4*(pointsdict[3*i+1]*pointsdict[3*i+1]-3*pointsdict[3*i+2]*pointsdict[3*i+2])*pointsdict[3*i+1]*pointsdict[3*i];
+		pix[3*i+1] = 0;
+		}
+	} else if (type=="ml44") {
+		for (i = 0; i< numPts; i++) {
+		var sqx = pointsdict[3*i+1]*pointsdict[3*i+1];
+		var sqy = pointsdict[3*i+2]*pointsdict[3*i+2];
+		pix[3*i] = 1.5*(sqx*sqx-6*sqx*sqy+sqy*sqy);
+		pix[3*i+1] = 0;
+		}
+	}
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture1, 0);
+        if( gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+        alert(err + "FLOAT as the color attachment to an FBO");
+	}
+    }
+		
+    function drawScene() {
+
+	if (maincanvas.clientWidth != maincanvas.width || maincanvas.clientHeight != maincanvas.height) {
+		maincanvas.width = maincanvas.clientWidth;
+		maincanvas.height = maincanvas.clientHeight;
+		
+	}
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.useProgram(prog_show);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	projectionMatrix.makeIdentity();
+        projectionMatrix.perspective(45, maincanvas.clientWidth / maincanvas.clientHeight, 0.1, 100.0);
+
+        modelviewMatrix.makeIdentity();
+	modelviewMatrix.translate(0,0,-5);
+	curRotQ = qNormalize(curRotQ);
+	qr = curRotQ[0];
+	qi = curRotQ[1];
+	qj = curRotQ[2];
+	qk = curRotQ[3];
+	mat = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
+		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
+		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
+		0, 0, 0, 1];
+	rotMatrix.load(mat);
+	gl.uniformMatrix3fv(mvMatrixLoc, false, [mat[0],mat[1],mat[2],mat[4],mat[5],mat[6],mat[8],mat[9],mat[10]]);
+	modelviewMatrix.multiply(rotMatrix);
+	
+	projectionMatrix.multiply(modelviewMatrix);
+	projectionMatrix.setUniform(gl, mvpMatrixLoc, false);
+
+        gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer); 
+        gl.drawElements(gl.TRIANGLES, drawLength, gl.UNSIGNED_SHORT, 0);
+	gl.flush();
+    }
+
+    function tick() {
+        requestAnimFrame(tick, maincanvas);
+        gl.useProgram(prog);
+        gl.disable(gl.BLEND);
+        gl.disable(gl.DEPTH_TEST);
+        gl.viewport(0, 0, m, m);
+        gl.uniform1i(samp, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pointsBuffer);
+        gl.drawElements(gl.POINTS, numPts, gl.UNSIGNED_SHORT, 0);
+        
+        gl.uniform1i(samp, 1);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pointsBuffer);
+        gl.drawElements(gl.POINTS, numPts, gl.UNSIGNED_SHORT, 0);
+	drawScene();
+    }
+
+    var maincanvas, colorcanvas, colorctx, baseRotQ, dragBaseX, dragBaseY;
+    var mainDrag = false;
+    var colorDrag = false;
+    var initialized = false;
+
+    function webGLStart() {
+        maincanvas = document.getElementById("example");
+        gl = WebGLUtils.setupWebGL(maincanvas);
+        initShaders();
+        document.getElementById("damping").value = 0.0;
+	updateValue("dampingValue","0");
+	document.getElementById("speed").value = 1.0;
+	updateValue("speedValue","1");
+	document.getElementById("shininess").value = 0.0;
+	updateValue("shineValue","0");
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearDepth(100);
+	maincanvas.addEventListener("mousedown",handleMouseDown,false);
+	document.documentElement.onmouseup = function() {mainDrag = false; colorDrag = false};
+	document.documentElement.onmouseleave = function() {mainDrag = false; colorDrag = false};
+	document.documentElement.onmousemove = function(event) {handleMouseMove(event)};
+	colorcanvas = document.getElementById("colorcanvas");
+        colorctx = colorcanvas.getContext("2d");
+	colorcanvas.addEventListener("mousedown", function (event) {colorDrag = true;
+		handleMouseMove(event);}, false);
+	colormousemove(55,10);
+
+        tick();
+    }
+
+    function handleMouseMove(evt) {
+	if (mainDrag) rotate(evt.clientX, evt.clientY);
+	else if (colorDrag) {
+	var rect = colorcanvas.getBoundingClientRect();
+	colormousemove(evt.clientX-rect.left, evt.clientY-rect.top);
+	}
+    }
+
+    function updateValue(id,value) {
+	if (initialized) {
+	var val = Number(value);
+	if (id=='dampingValue') {
+                gl.useProgram(prog);
+		gl.uniform1f(dampingLoc,val/100);
+		document.getElementById("dampval").innerHTML = value;
+	}
+	if (id=='speedValue') {
+                gl.useProgram(prog);
+		gl.uniform1f(speedLoc, 0.4*val);
+		document.getElementById("speedval").innerHTML = value;
+	}
+	if (id=='shineValue') {
+		gl.useProgram(prog_show);
+		gl.uniform1f(shininessLoc,val);
+		document.getElementById("shineval").innerHTML = value;
+	}
+	}
+    }
+
+    function rotate(x,y) {
+	var dx = x-dragBaseX;
+	var dy = y-dragBaseY;
+	var norm = Math.sqrt(dx*dx+dy*dy);
+	if (norm > 0) {
+	dx = dx/norm;
+	dy = dy/norm;
+	}
+	curRotQ = qMultiply(baseRotQ,[Math.cos(norm/200),-dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0]);	
+    }
+
+    function handleMouseDown(evt){
+	if (evt.button==0 && initialized) {
+		mainDrag = true;
+		dragBaseX = evt.clientX;
+		dragBaseY = evt.clientY;
+		baseRotQ = curRotQ;
+	}
+    }
+
+   function colormousemove(x,y) {
+	if (x > 135) x = 135;
+	if (x < 15) x = 15;
+	colorctx.clearRect(0,0,150,20);
+	var grd = colorctx.createLinearGradient(15,0,120,0);
+	grd.addColorStop(0,"#FF0808");
+	grd.addColorStop(0.333,"#08FF08");
+	grd.addColorStop(0.666,"#0808FF");
+	grd.addColorStop(1.0,"#FF0808");
+	colorctx.fillStyle = grd;
+	colorctx.fillRect(15,7,120,6);
+	colorctx.fillStyle = "#DC143C";
+	colorctx.beginPath();
+	colorctx.arc(x,10,5,0,2*Math.PI,false);
+	colorctx.fill();
+	var xscale = (x-15)/40.0;
+	var hColor;
+	if (xscale <= 1) {
+		hColor = [1-xscale, xscale,0];
+	} else if (xscale <= 2) {
+		hColor = [0,2-xscale,xscale-1];
+	} else {
+		hColor = [xscale-2,0,3-xscale];
+	}
+	gl.useProgram(prog_show);	
+	gl.uniform3f(basecolorLoc, hColor[0], hColor[1], hColor[2]);
+    }
+	
+		
+</script>
+</head>
+
+<body onload="webGLStart()">
+<canvas id="example"></canvas>
+<div id="controls">
+Damping: <div id="dampval" style="display: inline"></div>
+<div class="slider"><input class="range" id="damping" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('dampingValue', this.value)" type="range" onchange="updateValue('dampingValue', this.value)"> </div>
+<br>
+Speed: <div id="speedval" style="display: inline"></div>
+<div class="slider"><input class="range" id="speed" min="0.0" max="2.0" value="1.0" step="0.1" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
+<br>
+Shininess: <div id="shineval" style="display: inline"></div>
+<div class="slider"><input class="range" id="shininess" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('shineValue', this.value)" type="range" onchange="updateValue('shineValue', this.value)"> </div>
+<br>
+Color:
+<br>
+<canvas id="colorcanvas" width="150px" height="20px"></canvas>
+<br>
+With jitter:
+<br>
+<button type="button" onclick="loadInitialValues('classic',1)">Classic</button>
+<button type="button" onclick="loadInitialValues('pulse',1)">Pulse</button>
+<button type="button" onclick="loadInitialValues('doublepulse',1)">Double Pulse</button>
+<br>
+<br>
+Without jitter:
+<br>
+<button type="button" onclick="loadInitialValues('classic',0)">Classic</button>
+<button type="button" onclick="loadInitialValues('pulse',0)">Pulse</button>
+<button type="button" onclick="loadInitialValues('doublepulse',0)">Double Pulse</button>
+<br>
+<br>
+Spherical harmonics:
+<br>
+<button type="button" onclick="loadInitialValues('ml04',0)">L=4, M=0</button>
+<button type="button" onclick="loadInitialValues('ml14',0)">L=4, M=1</button>
+<button type="button" onclick="loadInitialValues('ml24',0)">L=4, M=2</button>
+<button type="button" onclick="loadInitialValues('ml34',0)">L=4, M=3</button>
+<button type="button" onclick="loadInitialValues('ml44',0)">L=4, M=4</button>
+<br>
+<br>
+<button type="button" onclick="loadInitialValues('ml02',0)">L=2, M=0</button>
+<button type="button" onclick="loadInitialValues('ml12',0)">L=2, M=1</button>
+</div>
+<div id="text">
+<hr>
+Click and drag to rotate
+<br>
+<br>
+To freeze animations, you can set the "Speed" slider to zero
+<br>
+<br>
+If this doesn't work or runs slowly in your browser, you might want to try this <a href = "elasticsphere.html" style="color:GreenYellow">older version.</a>
+<hr>
+<h1>Math notes</h1>
+<br>
+The wave equation for a function <i>f</i> is
+<h2 style="text-align:center"><i>f<sub>tt</sub></i> = &#x2207<sup>2</sup><i>f</i></h2>
+where &#x2207<sup>2</sup> is the Laplacian, and <i>f<sub>tt</sub></i> is the second partial derivative of <i>f</i>
+with respect to time.  The exact definition of the Laplacian depends on the space that <i>f</i> lives on,
+but the basic idea is that the Laplacian measures how concave or convex the graph of <i>f</i> is.  On the real line, the Laplacian is just the ordinary
+second derivative used to determine whether <i>f</i> is concave up or down.  In three dimensional Euclidean space,
+the Laplacian is &#x2207<sup>2</sup><i>f</i>(<i>x,y,z</i>)=<i>f<sub>xx</sub>+f<sub>yy</sub>+f<sub>zz</sub></i>.
+<br>
+<br>
+Defining the Laplacian on a curved surface is a little trickier.  If you want to get really fancy, you can use the metric
+on the surface to define the so-called <a href="http://en.wikipedia.org/wiki/Laplace-Beltrami_operator" style="color:GreenYellow">Laplace-Beltrami operator</a>.
+For the two-dimensional sphere <i>S</i> defined by <i>x</i><sup>2</sup>+<i>y</i><sup>2</sup>+<i>z</i><sup>2</sup> = 1, there is a much easier approach that doesn't require differential geometry.  Given a real-valued function <i>f</i> on <i>S</i>, we can extend it to all of 3-space minus the origin as follows: using vector notation <i>v</i> = (<i>x,y,z</i>), let <i>f</i>(<i>v</i>) = <i>f</i>(<i>v/|v|</i>), where <i>|v|</i> = (<i>x</i><sup>2</sup>+<i>y</i><sup>2</sup><i>+z</i><sup>2</sup>)<sup>1/2</sup>.  Then just use the regular Laplacian on 3-space from before.  This works for higher-dimensional spheres as well.
+<br>
+<br>
+The wave equation gets its name from modeling wave propagation on an elastic string or thin surface.  The basic idea is that <i>f</i> measures displacement of the string or surface from equilibrium.  If this displacement isn't too big, then up to a constant, &#x2207<sup>2</sup><i>f</i> is a good approximation to the force on the medium caused by tension.  According to Newton's law, force is proportional to acceleration, which is <i>f<sub>tt</sub></i>.  Setting these two things equal gives the wave equation.
+<br>
+<br>
+This program uses the numerical method from
+<a href="http://www.giseis.alaska.edu/input/carl/research/pubs/thesis/membrane_cht_THESIS.pdf" style="color:GreenYellow">this paper</a> to approximate the wave equation on a sphere.  The most popular numerical methods for PDEs are <a href="http://en.wikipedia.org/wiki/Finite_difference_method" style="color:GreenYellow">finite difference methods</a> that work by approximating functions with their values on a discrete grid.  Derivatives at each point are approximated by looking at adjacent values on the grid.  In this case we use a triangular mesh on the sphere made up of about 2,000 points.  To approximate the Laplacian, the paper uses the <a href="http://en.wikipedia.org/wiki/Divergence_theorem" style="color:GreenYellow">divergence theorem</a> from vector calculus (which is also true on surfaces) applied to the gradient of <i>f</i>, and the fact that the Laplacian is equal to the divergence of the gradient.
+<br>
+<br>
+Special solutions of the wave equation can be built from <a href="http://en.wikipedia.org/wiki/Spherical_harmonics" style="color:GreenYellow">spherical harmonics</a>, real valued functions <i>Y</i>(<i>v</i>) on the sphere which are eigenfunctions of the Laplacian.  Eigenfunction means that &#x2207<sup>2</sup><i>Y</i>(<i>v</i>) = -&#x3bb<i>Y</i>(<i>v</i>) for some constant &#x3bb.  If &#x3bb is positive, then it is easy to check that <i>f</i>(<i>v,t</i>) = cos(&#x3bb<sup>1/2</sup><i>t</i>)<i>Y</i>(<i>v</i>) is a solution of the wave equation.  Since <i>Y</i>(<i>v</i>) does not depend on time, <i>f</i>(<i>v,t</i>) will be a constant multiple of <i>Y</i>(<i>v</i>) at all times.  Graphing <i>f</i>(<i>v,t</i>) gives a surface that pulses in and out but otherwise does not change shape.  Checking that the solution has this behavior is one way to check whether a numerical method is accurate.  
+<br>
+<br>
+The buttons in the program let you try different spherical harmonics as initial conditions.  The value of L on the button is defined in terms of the eigenvalue &#x3bb, while the M has to do with the fact that by definition, spherical harmonics are also eigenfunctions of another differential operator, an angular momentum operator used in quantum mechanics.  (Spherical harmonics show up in the solution to Schrodinger's equation for an atom with one electron, and actually define the shape of the orbitals that you see in chemistry books.  They are also related to the shape of the periodic table.)  For some of the spherical harmonics, the shapes have the expected pulsing behavior, but for others, they gradually become distorted.  This is interesting to watch, but means that the numerical method being used in the program is inaccurate.  Since it was designed for speed rather than accuracy, this isn't too surprising.  Another way to see inaccuracies is to note that the "Pulse" function starts out with an axis of symmetry that should be preserved by the wave equation, but quickly breaks down in the program.
+<br>
+<br>
+It's interesting to think about why some of the harmonics are stable and others are not.  While I don't know exactly what is going on, I think this is because the stable harmonics (the three buttons with L=2, M=0; L=2, M=1; and L=4, M=2) have a certain configuration that the others do not.  We can look at all the points on the sphere where a given harmonic <i>Y</i>(<i>v</i>) equals zero.  In general, this will be a configuration of lines.  For the stable harmonics, at most two of the lines ever cross at a single point.  All of the unstable harmonics, except for L=4, M=0, have points where three or more lines cross.  This is not a stable configuration, because slightly wiggling any of the lines will turn the intersection point into three other intersection points where pairs of the lines cross instead of all three.  The L=4, M=0 harmonic actually has no line crossings, but it could be that the lines are still too close together to remain stable with this mesh size. 
+<hr>
+<h1>Programming notes</h1>
+In addition to the graphics rendering, this program does all the calculations for the finite difference method on the GPU.  This is potentially faster than doing the calculations in JavaScript because the calculation for each gridpoint can be done in parallel, which GPUs are good at.  
+<br>
+<br>
+Running the FDM on the GPU is done with a custom vertex shader and fragment shader.  In any WebGL program, the computer feeds arrays of data to the GPU, which are then processed with shaders.  For this program, the position and velocity at each point on the sphere are stored in what's called a "float texture", an array of floating point numbers that can be accessed anywhere in the vertex or fragment shader.  (Float textures are currently not built into core WebGL and require an extension.)  Textures were originally used to map patterns onto 3D shapes, but thanks to shaders, the data can be used pretty much however you want.  At each step of the FDM, the shaders calculate the new values and "render" them to another texture instead of the screen.  A different vertex/fragment shader are used to draw what you see on the screen.
+<br>
+<br>
+This method can be used to do a lot of interesting things with WebGL.  As well as the many demos on Chrome Experiments, check out <a href="http://www.ibiblio.org/e-notes/webgl/gpu/contents.htm" style="color:GreenYellow">http://www.ibiblio.org/e-notes/webgl/gpu/contents.htm</a> and <a href=http://flexi23.pisces.uberspace.de/fmx/?full#21 style="color:GreenYellow">http://flexi23.pisces.uberspace.de/fmx/?full#21</a>.
+<br>
+<br>
+There are some drawbacks with using the GPU for calculations.  For instance, it's hard (at least with the current WebGL standard) to get data from a float texture back onto the CPU so you can do stuff with it in JavaScript.  This can make it hard to add interactive features.
+<hr>
+<br>
+<br>
+<br>
+</div>
+</body>
+<script src="J3DIMath.js"></script>
+<script src="webgl-utils.js"></script>

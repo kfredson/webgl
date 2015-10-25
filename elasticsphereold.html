@@ -1,0 +1,637 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Elastic Sphere</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: rgb(85,85,85);
+}
+#example {
+  width: 600px;
+  height: 600px;
+}
+#controls {
+  color: white;
+  position: absolute;
+  top: 10px;
+  left: 610px;
+}
+</style>
+<script src="J3DIMath.js"></script>
+<script src="J3DI.js"></script>
+<script src="mesh.js"></script>
+<script src="webgl-utils.js"></script>
+<script id="vshader" type="x-shader/x-vertex">
+    precision mediump float;
+    uniform mat4 u_modelViewProjMatrix;
+    uniform mat3 modelViewMatrix;
+
+    attribute vec3 aVertexPosition;
+    attribute float aVertexValue;
+    //attribute vec3 aVertexColor;
+
+    attribute vec3 av1;
+    attribute vec3 av2;
+    attribute vec3 av3;
+    attribute vec3 av4;
+    attribute vec3 av5;
+    attribute vec3 av6;
+    attribute float v1;
+    attribute float v2;
+    attribute float v3;
+    attribute float v4;
+    attribute float v5;
+    attribute float v6;
+
+    varying vec3 vc;
+    varying vec3 vn;
+    varying vec3 vp;
+    vec3 z = vec3(0.0,0.0,0.0);
+
+    void main()
+    {
+	vp = aVertexValue*aVertexPosition;
+        gl_Position = u_modelViewProjMatrix * vec4(vp, 1.0);
+	vec3 n1 = z;
+	n1 = n1+cross(v1*av1-vp,v2*av2-vp);
+	n1 = n1+cross(v2*av2-vp,v3*av3-vp); 
+	n1 = n1+cross(v3*av3-vp,v4*av4-vp);
+	n1 = n1+cross(v4*av4-vp,v5*av5-vp);
+	if (av6 == z) {
+		n1 = n1+cross(v5*av5-vp,v1*av1-vp);
+	} else {
+		n1 = n1+cross(v5*av5-vp,v6*av6-vp);
+		n1 = n1+cross(v6*av6-vp,v1*av1-vp);
+	}
+	vn = modelViewMatrix*normalize(n1);
+	vc = clamp(vec3((aVertexValue-1.0),0.3,2.0*(1.0-aVertexValue)),0.0,2.0);
+    }
+</script>
+
+<script id="fshader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec3 vc;
+    varying vec3 vn;
+    varying vec3 vp;
+
+    void main()
+    {
+	vec3 vnormal = normalize(vn);
+	vec3 vpos = normalize(-vp+vec3(0.0,0.0,5.0));
+	vec3 rm = normalize(2.0*vnormal.z*vnormal-vec3(0.0,0.0,1.0));
+	float val = clamp(dot(rm,vpos),0.0,1.0);
+	val = val*val;
+	val = val*val;
+	val = val*val;
+	val = val*val;
+        gl_FragColor = vec4(clamp(vnormal.z,0.0,1.0)*vc+vec3(0.0,0.1,0.0)+val*(0.3,0.3,0.3),1.0);
+    }
+</script>    
+
+<script>
+var gl;
+var curRotQ = [1.0,0.0,0.0,0.0];
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+    //quaternion multiplication
+    function qMultiply(q1, q2) {
+	return [q1[0]*q2[0]-q1[1]*q2[1]-q1[2]*q2[2]-q1[3]*q2[3],
+		q1[0]*q2[1]+q1[1]*q2[0]+q1[2]*q2[3]-q1[3]*q2[2],
+		q1[0]*q2[2]-q1[1]*q2[3]+q1[2]*q2[0]+q1[3]*q2[1],
+		q1[0]*q2[3]+q1[1]*q2[2]-q1[2]*q2[1]+q1[3]*q2[0]];
+    }
+
+    //quaternion normalization
+    function qNormalize(q) {
+	var norm = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
+	if (norm != 0) return [q[0]/norm, q[1]/norm, q[2]/norm, q[3]/norm];
+	else return q;
+    }
+
+    var shaderProgram;
+
+    function initShaders() {
+        var fragmentShader = getShader(gl, "fshader");
+        var vertexShader = getShader(gl, "vshader");
+
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialise shaders");
+        }
+
+        gl.useProgram(shaderProgram);
+
+        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+        shaderProgram.vertexValueAttribute = gl.getAttribLocation(shaderProgram, "aVertexValue");
+	gl.enableVertexAttribArray(shaderProgram.vertexValueAttribute);
+
+        shaderProgram.mvpMatrixUniform = gl.getUniformLocation(shaderProgram, "u_modelViewProjMatrix");
+	shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "modelViewMatrix");
+	
+	shaderProgram.av1 = gl.getAttribLocation(shaderProgram,"av1");
+	gl.enableVertexAttribArray(shaderProgram.av1);
+	shaderProgram.av2 = gl.getAttribLocation(shaderProgram,"av2");
+	gl.enableVertexAttribArray(shaderProgram.av2);
+	shaderProgram.av3 = gl.getAttribLocation(shaderProgram,"av3");
+	gl.enableVertexAttribArray(shaderProgram.av3);
+	shaderProgram.av4 = gl.getAttribLocation(shaderProgram,"av4");
+	gl.enableVertexAttribArray(shaderProgram.av4);
+	shaderProgram.av5 = gl.getAttribLocation(shaderProgram,"av5");
+	gl.enableVertexAttribArray(shaderProgram.av5);
+	shaderProgram.av6 = gl.getAttribLocation(shaderProgram,"av6");
+	gl.enableVertexAttribArray(shaderProgram.av6);
+	shaderProgram.v1 = gl.getAttribLocation(shaderProgram,"v1");
+	gl.enableVertexAttribArray(shaderProgram.v1);
+	shaderProgram.v2 = gl.getAttribLocation(shaderProgram,"v2");
+	gl.enableVertexAttribArray(shaderProgram.v2);
+	shaderProgram.v3 = gl.getAttribLocation(shaderProgram,"v3");
+	gl.enableVertexAttribArray(shaderProgram.v3);
+	shaderProgram.v4 = gl.getAttribLocation(shaderProgram,"v4");
+	gl.enableVertexAttribArray(shaderProgram.v4);
+	shaderProgram.v5 = gl.getAttribLocation(shaderProgram,"v5");
+	gl.enableVertexAttribArray(shaderProgram.v5);
+	shaderProgram.v6 = gl.getAttribLocation(shaderProgram,"v6");
+	gl.enableVertexAttribArray(shaderProgram.v6);
+    }
+
+    var spherePointsBuffer;
+    var spherePointsArray;
+    var sphereValuesBuffer;
+    var sphereValuesArray;
+    var colorBuffer;
+    var indexBuffer;
+    var speedArray;
+    var numPts = pointsdict.length/3;
+    var drawLength = trianglearray.length;
+    var projectionMatrix = new J3DIMatrix4();
+    var modelviewMatrix = new J3DIMatrix4();
+    var unpackedEdgedict;
+    var unpackedWeightdict;
+    var valArray = [null,null,null,null,null,null];
+    var vol = 0;
+    var vol0 = 0;
+    valArray[0] = new Float32Array(numPts);
+    valArray[1] = new Float32Array(numPts);
+    valArray[2] = new Float32Array(numPts);
+    valArray[3] = new Float32Array(numPts);
+    valArray[4] = new Float32Array(numPts);
+    valArray[5] = new Float32Array(numPts);
+    var av1Buffer, av2Buffer, av3Buffer, av4Buffer, av5Buffer, av6Buffer;
+    var v1Buffer, v2Buffer, v3Buffer, v4Buffer, v5Buffer, v6Buffer;
+    var damping = 0;
+
+    function initBuffers() {
+        spherePointsBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, spherePointsBuffer);
+        spherePointsArray = new Float32Array(pointsdict);
+        gl.bufferData(gl.ARRAY_BUFFER, spherePointsArray, gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+        
+	sphereValuesBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereValuesBuffer);
+	sphereValuesArray = new Float32Array(numPts);
+	speedArray = new Float32Array(numPts);
+	loadInitialValues();
+	gl.bufferData(gl.ARRAY_BUFFER, sphereValuesArray, gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.vertexValueAttribute, 1, gl.FLOAT, false, 0, 0);
+	areaArray = new Float32Array(areadict);
+	var adjVertexArray1 = [];
+    	var adjVertexArray2 = [];
+    	var adjVertexArray3 = [];
+    	var adjVertexArray4 = [];
+    	var adjVertexArray5 = [];
+    	var adjVertexArray6 = [];
+
+	packingIndexArray = new Uint16Array(edgedict.length+1);
+	var curindex = 0;
+	var ue = [];
+	var uw = [];
+	for (i = 0; i<edgedict.length; i++) {
+		packingIndexArray[i] = curindex;
+		curindex += edgedict[i].length;
+		Array.prototype.push.apply(ue,edgedict[i]);
+		Array.prototype.push.apply(uw,weightdict[i]);
+		a = edgedict[i];
+		adjVertexArray1.push.apply(adjVertexArray1,[pointsdict[3*a[0]],pointsdict[3*a[0]+1],
+		pointsdict[3*a[0]+2]]); 
+		adjVertexArray2.push.apply(adjVertexArray2,[pointsdict[3*a[1]],pointsdict[3*a[1]+1],
+		pointsdict[3*a[1]+2]]);
+		adjVertexArray3.push.apply(adjVertexArray3,[pointsdict[3*a[2]],pointsdict[3*a[2]+1],
+		pointsdict[3*a[2]+2]]);
+		adjVertexArray4.push.apply(adjVertexArray4,[pointsdict[3*a[3]],pointsdict[3*a[3]+1],
+		pointsdict[3*a[3]+2]]);
+		adjVertexArray5.push.apply(adjVertexArray5,[pointsdict[3*a[4]],pointsdict[3*a[4]+1],
+		pointsdict[3*a[4]+2]]);
+		if (a.length == 5) adjVertexArray6.push.apply(adjVertexArray6,[0.0,0.0,0.0]);
+		else adjVertexArray6.push.apply(adjVertexArray6,[pointsdict[3*a[5]],pointsdict[3*a[5]+1],
+		pointsdict[3*a[5]+2]]);
+	}
+	packingIndexArray[i] = curindex;
+	unpackedEdgedict = new Uint16Array(ue);
+	unpackedWeightdict = new Float32Array(uw);
+	av1Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av1Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray1), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av1, 3, gl.FLOAT, false, 0, 0);
+
+	av2Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av2Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray2), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av2, 3, gl.FLOAT, false, 0, 0);
+
+	av3Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av3Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray3), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av3, 3, gl.FLOAT, false, 0, 0);
+
+	av4Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av4Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray4), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av4, 3, gl.FLOAT, false, 0, 0);
+
+	av5Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av5Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray5), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av5, 3, gl.FLOAT, false, 0, 0);
+	
+	av6Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, av6Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(adjVertexArray6), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.av6, 3, gl.FLOAT, false, 0, 0);
+
+	v1Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v1Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[0], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v1, 1, gl.FLOAT, false, 0, 0);
+
+	v2Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v2Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[1], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v2, 1, gl.FLOAT, false, 0, 0);
+	
+	v3Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v3Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[2], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v3, 1, gl.FLOAT, false, 0, 0);
+
+	v4Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v4Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[3], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v4, 1, gl.FLOAT, false, 0, 0);
+	
+	v5Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v5Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[4], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v5, 1, gl.FLOAT, false, 0, 0);
+
+	v6Buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, v6Buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, valArray[5], gl.DYNAMIC_DRAW);
+	gl.vertexAttribPointer(shaderProgram.v6, 1, gl.FLOAT, false, 0, 0);
+	
+        indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(trianglearray), gl.STATIC_DRAW);
+    }
+
+    function loadInitialValues() {
+	unclamp();
+	document.getElementById("damping").value = 0.0;
+	updateValue("dampingValue","0");
+	document.getElementById("speed").value = 1.0;
+	updateValue("speedValue","1");
+	document.getElementById("clampval").value = 2.0;
+	updateValue("clampValue","2");
+	var val = 0;
+	var randvals = [];
+	vol0 = 0;
+	vol = 0;
+	curRotQ = [1.0, 0.0, 0.0, 0.0];
+	for (i = 0; i<7; i++) randvals.push(Math.floor(Math.random()*numPts));
+	for (i = 0; i< numPts; i++) {
+		val = 0;
+		for (j = 0; j < 7; j++) {
+			val += 1/(Math.pow(2*pointsdict[3*randvals[j]]-pointsdict[3*i],2)+
+				Math.pow(2*pointsdict[3*randvals[j]+1]-pointsdict[3*i+1],2)+
+				Math.pow(2*pointsdict[3*randvals[j]+2]-pointsdict[3*i+2],2));	
+		} 
+		//maxval = Math.max(Math.abs(pointsdict[3*i]),Math.abs(pointsdict[3*i+1]),Math.abs(pointsdict[3*i+2]));
+		sphereValuesArray[i] = val/2+Math.random()/20; //+Math.random()/10;
+		vol0 += sphereValuesArray[i];
+		vol += sphereValuesArray[i];
+		//0.75/maxval+Math.random()/6;
+		speedArray[i] = 0.0;
+	}
+    }	
+
+    var rSphere = 0;
+    var rotMatrix = new J3DIMatrix4();
+    var speed = 1.0;
+
+    function drawScene() {
+
+	if (maincanvas.clientWidth != maincanvas.width || maincanvas.clientHeight != maincanvas.height) {
+		maincanvas.width = maincanvas.clientWidth;
+		maincanvas.height = maincanvas.clientHeight;
+		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	}
+
+
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	projectionMatrix.makeIdentity();
+        projectionMatrix.perspective(45, maincanvas.clientWidth / maincanvas.clientHeight, 0.1, 100.0);
+
+        modelviewMatrix.makeIdentity();
+	modelviewMatrix.translate(0,0,-5);
+	curRotQ = qNormalize(curRotQ);
+	qr = curRotQ[0];
+	qi = curRotQ[1];
+	qj = curRotQ[2];
+	qk = curRotQ[3];
+	m = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
+		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
+		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
+		0, 0, 0, 1];
+	rotMatrix.load(m);
+	gl.uniformMatrix3fv(shaderProgram.mvMatrixUniform, false, [m[0],m[1],m[2],m[4],m[5],m[6],m[8],m[9],m[10]]);
+	modelviewMatrix.multiply(rotMatrix);
+	
+	projectionMatrix.multiply(modelviewMatrix);
+	projectionMatrix.setUniform(gl, shaderProgram.mvpMatrixUniform, false);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, sphereValuesBuffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, sphereValuesArray);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v1Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[0]);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v2Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[1]);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v3Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[2]);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v4Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[3]);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v5Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[4]);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, v6Buffer);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, valArray[5]);
+
+        gl.drawElements(gl.TRIANGLES, drawLength, gl.UNSIGNED_SHORT, 0);
+    }
+
+    var dv = 0;
+    var v0 = 0;
+    var index = 0;
+    var kinetic = 0;
+    var cdate;
+    var scaler = 0;
+
+    function tick() {
+        requestAnimFrame(tick, maincanvas);
+	dv = 0;
+	v0 = 0;
+	kinetic = 0;
+	for (i = 0; i < unclampedListLength; i++) {
+		index = typedUCL[i];
+		v0 = sphereValuesArray[index];
+		dv = 0;
+		for (j = packingIndexArray[index]; j < packingIndexArray[index+1]; j++) {
+			v1 = sphereValuesArray[unpackedEdgedict[j]];
+			dv = dv+(v1-v0)*unpackedWeightdict[j];
+			valArray[j-packingIndexArray[index]][index] = v1;
+		}
+		speedArray[index]=(1.0-speed*damping)*speedArray[index]+(0.02*dv/areaArray[index]-0.001*(vol-vol0))*speed;
+		kinetic += speedArray[index]*speedArray[index];
+	}
+	for (i = 0; i < clampedListLength; i++) {
+		index = typedCL[i];
+		for (j = packingIndexArray[index]; j < packingIndexArray[index+1]; j++) {
+			v1 = sphereValuesArray[unpackedEdgedict[j]];
+			valArray[j-packingIndexArray[index]][index] = v1;
+		}
+	}
+	drawScene();
+	cdate = Date.now();
+	if (kinetic > 750) {
+		scaler = Math.sqrt(750/kinetic);
+		for (i = 0; i < unclampedListLength; i++) {		
+			index = typedUCL[i];			
+			speedArray[index] *= scaler;
+		}
+	}
+	if (cdate-lastdate > 500){
+		document.getElementById("kinetic").innerHTML=Math.round(kinetic).toString();
+		lastdate = cdate;
+	}
+	vol = 0;
+	for (i = 0; i < unclampedListLength; i++) {
+		index = typedUCL[i];
+		sphereValuesArray[index] = sphereValuesArray[index]+0.005*speedArray[index]*speed;
+		vol += sphereValuesArray[index];
+	}
+    }
+
+    var maincanvas;
+    var lastdate = Date.now();
+
+    function webGLStart() {
+        maincanvas = document.getElementById("example");
+        gl = WebGLUtils.setupWebGL(maincanvas);
+        initShaders();
+        initBuffers();
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearDepth(100);
+        gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+	damping = document.getElementById('damping').value/100;
+	speed = document.getElementById('speed').value;
+	maincanvas.addEventListener("mousedown",handleMouseDown,false);
+	maincanvas.addEventListener("mousemove",handleMouseMove,false);
+	document.documentElement.onmouseup = function() {rightButtonDrag = false};
+	document.documentElement.onmouseleave = function() {rightButtonDrag = false};
+
+        tick();
+    }
+
+    function handleMouseMove(evt) {
+	if (rightButtonDrag) rotate(evt.clientX, evt.clientY);
+    }
+
+    function updateValue(id,value) {
+	var val = Number(value);
+	if (id=='dampingValue') {
+		damping = val/100;
+		document.getElementById("dampval").innerHTML = value;
+	}
+	if (id=='speedValue') {
+		speed = val;
+		document.getElementById("speedval").innerHTML = value;
+	}
+	if (id=='clampValue') {
+		var len = clampedList.length;
+		vol = vol+len*(val-clampValue);
+		vol0 = vol0+len*(val-clampValue);
+		clampValue = val;
+		document.getElementById("clampradius").innerHTML = value;
+		for (i = 0; i < len; i++) {
+			var index = clampedList[i];
+			sphereValuesArray[index]=clampValue;
+		}
+	}
+    }
+
+    var unclampedList = [];
+    var clampedList = [];
+    var unclampedListLength = numPts;
+    var clampedListLength = 0;
+    var typedUCL;
+    var typedCL;
+
+    function clamp() {
+	if (unclampedList.length==0) return;
+	else {
+		i = Math.floor(Math.random()*unclampedListLength);
+		var index = unclampedList[i];
+		clampedList[clampedListLength] = index;
+		document.getElementById("numptsclamped").innerHTML = clampedList.length.toString()+"/"+numPts.toString();
+		unclampedList.splice(i,1);
+		typedUCL = new Uint16Array(unclampedList);
+		typedCL = new Uint16Array(clampedList);
+		clampedListLength += 1;
+		unclampedListLength -= 1;
+		vol = vol+clampValue-sphereValuesArray[index];
+		vol0 = vol0+clampValue-sphereValuesArray[index];
+		sphereValuesArray[index] = clampValue;
+		speedArray[index] = 0;
+	}
+    }
+
+    var clampValue=2.0;
+
+    function unclamp() {
+	document.getElementById("numptsclamped").innerHTML = "0/"+numPts.toString();
+	clampedList = [];
+	unclampedList = [];
+	for (i = 0; i < numPts; i++) unclampedList.push(i);
+	typedUCL = new Uint16Array(unclampedList);
+	typedCL = new Uint16Array(clampedList);
+	clampedListLength = 0;
+	unclampedListLength = numPts;
+    }
+
+    function jitter() {
+	for (i = 0; i < unclampedListLength; i++) speedArray[typedUCL[i]] += 2*(Math.random()-0.5);
+    }
+
+    var baseRotQ;
+    var dragBaseX;
+    var dragBaseY;
+    var rightButtonDrag = false;
+
+    function rotate(x,y) {
+	var dx = x-dragBaseX;
+	var dy = y-dragBaseY;
+	var norm = Math.sqrt(dx*dx+dy*dy);
+	if (norm > 0) {
+	dx = dx/norm;
+	dy = dy/norm;
+	}
+	curRotQ = qMultiply(baseRotQ,[Math.cos(norm/200),-dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0]);	
+    }
+
+    function handleMouseDown(evt){
+	if (evt.button==0) {
+		rightButtonDrag = true;
+		dragBaseX = evt.clientX;
+		dragBaseY = evt.clientY;
+		baseRotQ = curRotQ;
+	}
+    }
+	
+		
+</script>
+</head>
+
+<body onload="webGLStart()">
+<canvas id="example"></canvas>
+<div id="controls">
+Damping: <div id="dampval" style="display: inline"></div>
+<div class="slider"><input class="range" id="damping" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('dampingValue', this.value)" type="range" onchange="updateValue('dampingValue', this.value)"> </div>
+<br>
+Speed: <div id="speedval" style="display: inline"></div>
+<div class="slider"><input class="range" id="speed" min="0.0" max="2.0" value="1.0" step="0.1" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
+<br>
+Clamping radius: <div id="clampradius" style="display: inline"></div>
+<div class="slider"><input class="range" id="clampval" min="0.5" max="2.0" value="2.0" step="0.1" oninput="updateValue('clampValue', this.value)" type="range" onchange="updateValue('clampValue', this.value)"> </div>
+<br>
+<button type="button" onclick="loadInitialValues()">Reset</button>
+<button type="button" onclick="clamp()">Clamp</button>
+<button type="button" onclick="unclamp()">Unclamp</button>
+<button type="button" onclick="jitter()">Jitter</button>
+<br>
+<br>
+Points clamped: <div id="numptsclamped" style="display: inline"></div>
+<br>
+<br>
+Kinetic energy: <div id="kinetic" style="display: inline"></div>
+<br>
+(Capped at 750)
+<br>
+<br>
+Click and drag to rotate
+<br>
+<br>
+Uses the numerical method for the wave equation 
+<br>on a sphere from
+<a href="http://www.giseis.alaska.edu/input/carl/research/pubs/thesis/membrane_cht_THESIS.pdf">this paper</a>
+</div>
+</body>

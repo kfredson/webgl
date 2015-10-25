@@ -1,0 +1,427 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Image Distortion</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(85,85,85);
+  color: white;
+}
+#example {
+  float: left;
+}
+#controls {
+  margin: 10px;
+  float: left;
+}
+</style>
+<script src="webgl-utils.js"></script>
+
+<script id="shader-vs-show" type="x-shader/x-vertex"> 
+    precision mediump float;
+    attribute vec2 vp;
+    varying vec2 texCoord;
+
+    void main()
+    {
+	gl_Position = vec4(vp, 0., 1.);
+	texCoord = vec2((vp.x+1.)/2., (vp.y+1.)/2.);
+    }
+</script> 
+ 
+<script id="shader-fs-show" type="x-shader/x-fragment"> 
+    precision mediump float;
+    uniform sampler2D samp;
+    uniform vec2 mouseloc;
+    uniform vec2 dimensions;
+    uniform float radius;
+    uniform int type;
+    uniform float strength;
+    
+    varying vec2 texCoord; 
+
+    void main()
+    {
+	if (type==0) {	
+	float distsq = clamp(pow((texCoord.x-mouseloc.x)*(texCoord.x-mouseloc.x)*dimensions.x*dimensions.x/radius+
+		(texCoord.y-mouseloc.y)*(texCoord.y-mouseloc.y)*dimensions.y*dimensions.y/radius,strength/2.), 0., 1.);
+	vec2 coord = mouseloc+distsq*(texCoord-mouseloc);
+	gl_FragColor = texture2D(samp,coord);
+	} else if (type==1) {
+	float distsq = max(1.+6.*strength*(1.-pow((texCoord.x-mouseloc.x)*(texCoord.x-mouseloc.x)*dimensions.x*dimensions.x/radius+
+		(texCoord.y-mouseloc.y)*(texCoord.y-mouseloc.y)*dimensions.y*dimensions.y/radius,0.05)), 1.);
+	vec2 coord = mouseloc+distsq*(texCoord-mouseloc);
+	gl_FragColor = texture2D(samp,coord);
+	} else {
+	float dist = pow((texCoord.x-mouseloc.x)*(texCoord.x-mouseloc.x)*dimensions.x*dimensions.x/radius+
+		(texCoord.y-mouseloc.y)*(texCoord.y-mouseloc.y)*dimensions.y*dimensions.y/radius,0.5);
+	float angle = 6.*(strength-0.5)*max(1.-dist, 0.);
+	vec2 coord = mouseloc+vec2((texCoord.x-mouseloc.x)*cos(angle)-(texCoord.y-mouseloc.y)*(dimensions.y/dimensions.x)*sin(angle),
+				   (texCoord.y-mouseloc.y)*cos(angle)+(texCoord.x-mouseloc.x)*(dimensions.x/dimensions.y)*sin(angle));
+	gl_FragColor = texture2D(samp,coord);
+	}
+    }
+</script> 
+
+<script>
+var gl;
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+
+    function initShaders() {
+        prog  = gl.createProgram();
+        gl.attachShader(prog, getShader( gl, "shader-vs-show" ));
+        gl.attachShader(prog, getShader( gl, "shader-fs-show" ));
+        gl.linkProgram(prog);
+
+        gl.useProgram(prog);
+	gl.samplerUniform = gl.getUniformLocation(prog, "samp");
+	gl.mouseUniform = gl.getUniformLocation(prog, "mouseloc");
+	gl.dimsUniform = gl.getUniformLocation(prog, "dimensions");
+	gl.radiusUniform = gl.getUniformLocation(prog, "radius");
+	gl.typeUniform = gl.getUniformLocation(prog, "type");
+	gl.strengthUniform = gl.getUniformLocation(prog, "strength");
+	gl.uniform1f(gl.strengthUniform,0);
+	gl.uniform1i(gl.typeUniform,0);
+	gl.uniform2f(gl.mouseUniform, 2.0, 2.0);
+	gl.enableVertexAttribArray(0);
+	var trianglepts = [-1,-1,-1,1,1,1,1,-1];
+	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(trianglepts), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    }
+
+    function drawScene() {
+
+	if (maincanvas.clientWidth != maincanvas.width || maincanvas.clientHeight != maincanvas.height) {
+		maincanvas.width = maincanvas.clientWidth;
+		maincanvas.height = maincanvas.clientHeight;
+	}
+	if (currentTexture==0) {	
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, texture0);
+	} else {
+	gl.activeTexture(gl.TEXTURE1);
+	gl.bindTexture(gl.TEXTURE_2D, texture1);
+	}
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	gl.uniform1i(gl.samplerUniform, currentTexture);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+    }
+
+    function handleMouseMove(evt) {
+	if (!frozen && initialized) {	
+	var rect = maincanvas.getBoundingClientRect();
+	var x = evt.clientX-rect.left;
+	var y = evt.clientY-rect.top;
+	gl.uniform2f(gl.mouseUniform, x/rect.width, 1-y/rect.height);
+	drawScene();
+	}
+    }
+	
+
+    var maincanvas, texture0, texture1, invisibleCanvas, ctx, iterator, FBO, currentTexture, nw, nh; 
+    var initialized = false;
+    var curradius;
+
+    function loadImage(obj,isURL) {
+	var imageObj = new Image();
+	document.getElementById("loadinfo").innerHTML = "Loading image...";
+	imageObj.onload = function() {
+	document.getElementById("loadinfo").innerHTML = "<br>";
+	initialized = false;
+	var w = imageObj.width;
+	var h = imageObj.height;
+	if (w==0) w = 1;
+	if (h==0) h = 1;
+	nw = Math.min(Math.pow(2,Math.ceil(Math.log(w)/Math.log(2))),1024);
+	nh = Math.min(Math.pow(2,Math.ceil(Math.log(h)/Math.log(2))),1024);
+	invisibleCanvas.width=nw;
+	invisibleCanvas.height=nh;
+        ctx.drawImage(imageObj, 0, 0, nw, nh);
+	currentTexture = 1;
+	gl.activeTexture(gl.TEXTURE1);
+	gl.bindTexture(gl.TEXTURE_2D, texture1);
+    	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, nw, nh));
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, texture0);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, nw, nh, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture0, null);
+    	gl.bindTexture(gl.TEXTURE_2D, null);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	/* gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, texture0);
+    	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, nw, nh));
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); */
+	var m = Math.max(w,h);
+	if (m == w && w > 1024) {h *= 1024/w; w = 1024;}  
+	else if (h > 1024) {w *= 1024/h; h = 1024;}
+	maincanvas.width = w;
+	maincanvas.height = h;
+	curradius = Math.min(w,h)/4;
+	gl.uniform1f(gl.radiusUniform, curradius*curradius);
+	gl.uniform2f(gl.dimsUniform, w, h);
+	gl.uniform2f(gl.mouseUniform, 2.0, 2.0);
+	frozen = false;
+	initialized = true;
+	drawScene();
+        };
+	imageObj.onerror = function() {
+	document.getElementById("loadinfo").innerHTML = "Error loading image";
+	};
+	if (isURL) imageObj.src = obj;
+	else {
+	var reader = new FileReader();
+	reader.onload = function(e) {imageObj.src = e.target.result}
+	reader.readAsDataURL(obj[0]);
+	}
+    }
+
+    var frozen = false;
+
+    function handleMouseDown(evt) {
+	if (!frozen) frozen=true;
+	else { frozen=false; 
+	handleMouseMove(evt);
+	if (initialized) { drawScene(); } } 
+    }
+
+    function incrementRadius() {
+	if (curradius<Math.min(maincanvas.width, maincanvas.height)/2) {
+	curradius += 2;
+	gl.uniform1f(gl.radiusUniform, curradius*curradius);
+	drawScene();
+	}
+    }
+
+    function decrementRadius() {
+	if (curradius>3) {
+	curradius -= 2;
+	gl.uniform1f(gl.radiusUniform, curradius*curradius);
+	drawScene();
+	}
+    }
+
+    function settype(type) {
+	if (initialized) {
+	gl.uniform1i(gl.typeUniform,type);
+	drawScene();
+	}
+    }
+
+    function webGLStart() {
+        maincanvas = document.getElementById("example");
+        gl = WebGLUtils.setupWebGL(maincanvas);
+	if (!gl) return;
+	invisibleCanvas = document.createElement("canvas");
+    	ctx = invisibleCanvas.getContext('2d');
+        initShaders();
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearDepth(100);
+	document.getElementById('magnify').checked = true;
+	maincanvas.addEventListener("mousemove",handleMouseMove,false);
+	maincanvas.addEventListener("mousedown",handleMouseDown,false);
+	window.addEventListener("keydown",handleKeyDown,false);
+	FBO = gl.createFramebuffer();
+	texture0 = gl.createTexture();	
+	texture1 = gl.createTexture();
+	loadImage('test.jpg',true);
+    }
+
+    function handleKeyDown(event) {
+	if (initialized) {
+	var k = event.which || event.keyCode;
+	if (k==65) {
+	incrementRadius();
+	}
+	if (k==90) {
+	decrementRadius();
+	}
+	}
+    }
+
+    function updateValue(param, value) {
+	if (initialized) {	
+	if (param=='strength') {
+	gl.uniform1f(gl.strengthUniform,value);
+	document.getElementById('strengthvalue').innerHTML = value.toString();
+	drawScene();			
+	}
+	else if (param=='radius') {
+	}
+	}
+    }
+
+    function save() {
+	if (initialized) {
+	if (currentTexture==0) {
+	gl.activeTexture(gl.TEXTURE1);
+	gl.bindTexture(gl.TEXTURE_2D, texture1);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, nw, nh, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture1, null);
+    	gl.bindTexture(gl.TEXTURE_2D, null);
+	} else {
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, texture0);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, nw, nh, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture0, null);
+    	gl.bindTexture(gl.TEXTURE_2D, null);
+	}
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+	gl.viewport(0, 0, nw, nh);
+	gl.uniform1i(gl.samplerUniform, currentTexture);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	currentTexture = 1-currentTexture;
+	gl.uniform2f(gl.mouseUniform,2.0,2.0);
+	frozen = false;	
+	}
+    }
+	
+    function revert() {
+    	if (initialized) {
+	currentTexture = 1;
+	gl.activeTexture(gl.TEXTURE1);
+	gl.bindTexture(gl.TEXTURE_2D, texture1);
+    	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, nw, nh));
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, texture0);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, nw, nh, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture0, null);
+    	gl.bindTexture(gl.TEXTURE_2D, null);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	gl.uniform2f(gl.mouseUniform, 2.0, 2.0);
+	drawScene();
+	}
+    }
+
+    function undo() {
+	if (initialized) {
+	gl.uniform2f(gl.mouseUniform, 2.0, 2.0);
+	frozen = false;
+	drawScene();
+	}
+    }
+</script>
+</head>
+
+<body onload="webGLStart()">
+<canvas id="example" oncontextmenu="return false;"></canvas>
+<div id="controls">
+<button type="button" onclick="loadImage('test.jpg',true)">Karl</button> 
+<button type="button" onclick="loadImage('desert.jpg',true)">Desert</button>
+<button type="button" onclick="loadImage('squirrel.jpg',true)">Squirrel</button>
+<br>
+<br>
+Upload your own image:
+<br>
+<input type="file" accept="image/*" onchange="loadImage(this.files,false)" oninput="loadImage(this.files,false)"></input>
+<br>
+<div id="loadinfo"> <br> </div>
+<br>
+Press 'a' to increase radius
+<br>
+Press 'z' to decrease radius
+<br>
+<br>
+Radius: <div id="radiusvalue" style="display: inline"></div>
+<div class="slider"><input class="range" id="radius" min="0.0" max="1.0" value="0.0" step="0.01" oninput="updateValue('radius', this.value)" type="range" onchange="updateValue('radius', this.value)"> </div>
+<br>
+<br>
+<button type="button" onclick="save()">Save and add new effect</button>
+<br>
+<button type="button" onclick="revert()">Revert to original</button>
+<br>
+<button type="button" onclick="undo()">Clear current effect</button>
+<br>
+<br>
+Effect type:
+<br>
+<input type="radio" name="effectType" id="magnify" onclick="settype(0)" checked="true">Magnify</input>
+<br>
+<input type="radio" name="effectType" id="pinch" onclick="settype(1)">Pinch</input>
+<br>
+<input type="radio" name="effectType" id="swirl" onclick="settype(2)">Swirl</input>
+<br>
+<br>
+Effect strength: <div id="strengthvalue" style="display: inline"></div>
+<div class="slider"><input class="range" id="strength" min="0.0" max="1.0" value="0.0" step="0.01" oninput="updateValue('strength', this.value)" type="range" onchange="updateValue('strength', this.value)"> </div>
+</body>

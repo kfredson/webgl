@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<!--
+/*
+ * Copyright (C) 2009 Apple Inc. All Rights Reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE INC. OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+ -->
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Terrain WebGL Demo</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+#framerate {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 1em;
+  color: white;
+}
+#controls {
+  position: absolute;
+  top: 80px;
+  left: 10px;
+  color: white;
+}
+#example {
+  width: 100%;
+  height: 100%;
+}
+section {	
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-right: -50%;
+  transform: translate(-50%, -50%)
+}
+</style>
+<script src="webgl-utils.js"></script>
+<script src="J3DI.js"> </script>
+<script src="jszip.min.js"></script> 
+<script src="jszip-utils.js"></script>
+<script src="J3DIMath.js"></script>
+<script id="vshader" type="x-shader/x-vertex">
+    uniform mat4 u_modelViewProjMatrix;
+    uniform vec3 lightDir;
+    uniform float hscale;
+    uniform vec3 lColor;
+    uniform vec3 hColor;
+
+    attribute vec3 vNormal;
+    attribute float vColor;
+    attribute vec3 vPosition;
+
+    varying vec3 vc;
+
+    void main()
+    {
+	vec3 vp = vec3(vPosition.x, hscale*vPosition.y, vPosition.z);
+        gl_Position = u_modelViewProjMatrix * vec4(vp, 1.0);
+        vc = dot(vNormal,lightDir)*(vColor*lColor+(1.0-vColor)*hColor);
+    }
+</script>
+
+<script id="fshader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec3 vc;
+
+    void main()
+    {
+        gl_FragColor = vec4(vc,1.0);
+    }
+</script>
+
+<script>
+    var g = {};
+    var gl;
+    var initialized = false;
+
+    function init()
+    {
+        // Initialize
+        gl = initWebGL(
+            // The id of the Canvas Element
+            "example");
+        if (!gl) {
+          return;
+        }
+        g.program = simpleSetup(
+            gl,
+            // The ids of the vertex and fragment shaders
+            "vshader", "fshader",
+            // The vertex attribute names used by the shaders.
+            // The order they appear here corresponds to their index
+            // used later.
+            [ "vNormal", "vColor", "vPosition"],
+            // The clear color and depth values
+            [ 0.3, 0.3, 0.3, 1 ], 10000);
+	
+	JSZipUtils.getBinaryContent("dataList.js.zip",continueInit);
+
+	}
+
+    function continueInit(err,data) {
+
+	zip = new JSZip(data);
+
+	eval(zip.file("dataList.js").asText());
+
+	g.numTriangles = triangleList.length;
+
+        // Set some uniform variables for the shaders
+	g.light = [0,1,0];
+	g.lightLocation = gl.getUniformLocation(g.program, "lightDir");
+
+        // Create some matrices to use later and save their locations in the shaders
+        g.u_modelViewProjMatrixLoc =
+                gl.getUniformLocation(g.program, "u_modelViewProjMatrix");
+	g.lColorLoc = 
+		gl.getUniformLocation(g.program, "lColor");
+	gl.uniform3f(g.lColorLoc, g.lColor[0],g.lColor[1],g.lColor[2]);
+	g.hColorLoc = 
+		gl.getUniformLocation(g.program, "hColor");
+	gl.uniform3f(g.hColorLoc, g.hColor[0],g.hColor[1],g.hColor[2]);
+        g.mvpMatrix = new J3DIMatrix4();
+	g.mvMatrix = new J3DIMatrix4();
+	g.panMatrix = new J3DIMatrix4();
+	g.panMatrix.makeIdentity();
+	g.panMatrixInv = new J3DIMatrix4();
+	g.panMatrixInv.makeIdentity();
+	g.zoomMatrix = new J3DIMatrix4();
+	g.zoomMatrix.makeIdentity();
+	g.zoomvec = new J3DIVector3();
+	g.rotMatrix = new J3DIMatrix4();
+	g.rotMatrix.makeIdentity();
+	gl.uniform3f(g.lightLocation, g.light[0], g.light[1], g.light[2]);
+	g.hscale = 1.0;
+	g.hscaleLocation = gl.getUniformLocation(g.program, "hscale");
+	gl.uniform1f(g.hscaleLocation, g.hscale);
+
+	// Enable all of the vertex attribute arrays.
+        gl.enableVertexAttribArray(0);
+        gl.enableVertexAttribArray(1);
+        gl.enableVertexAttribArray(2);        
+	
+	// Set up all the vertex attributes for vertices, normals and texCoords
+	normalBuffer = gl.createBuffer();        
+	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+	
+	colorBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 0, 0);
+	
+	coordBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, coordBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coords), gl.STATIC_DRAW);
+	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+
+	indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(triangleList),gl.STATIC_DRAW);
+
+	document.getElementById("loading").innerHTML = "";
+	initialized = true;
+    }
+
+    var requestId;
+
+    function reshape()
+    {
+        // change the size of the canvas's backing store to match the size it is displayed.
+        if (g.maincanvas.clientWidth == g.maincanvas.width && g.maincanvas.clientHeight == g.maincanvas.height)
+            return;
+
+        g.maincanvas.width = g.maincanvas.clientWidth;
+        g.maincanvas.height = g.maincanvas.clientHeight;
+
+        // Set the viewport and projection matrix for the scene
+        gl.viewport(0, 0, g.maincanvas.clientWidth, g.maincanvas.clientHeight);
+        g.perspectiveMatrix = new J3DIMatrix4();
+	var fovangle = 30;
+        g.perspectiveMatrix.perspective(fovangle, g.maincanvas.clientWidth / g.maincanvas.clientHeight, 0.1, 100);
+	g.fovangletan = Math.tan(Math.PI*fovangle/360);
+    }
+
+    function drawPicture()
+    {
+	if (initialized) {        
+	// Make sure the canvas is sized correctly.
+        reshape();
+
+        // Clear the canvas
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	g.curCamQ = qNormalize(g.curCamQ);
+	var qr = g.curCamQ[0];	
+	var qi = g.curCamQ[1];
+	var qj = g.curCamQ[2];
+	var qk = g.curCamQ[3];
+	var m = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
+		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
+		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
+		0, 0, 0, 1];
+	g.panMatrix.load(m);
+	g.panMatrixInv.load(m);
+	g.panMatrixInv.transpose();
+	g.curRotQ = qNormalize(g.curRotQ);
+	qr = g.curRotQ[0];
+	qi = g.curRotQ[1];
+	qj = g.curRotQ[2];
+	qk = g.curRotQ[3];
+	m = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
+		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
+		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
+		0, 0, 0, 1];
+	g.rotMatrix.load(m);
+	
+        // Make a model/view matrix.
+	
+        g.mvMatrix.load(g.panMatrix);
+	g.mvMatrix.multiply(g.zoomMatrix);
+	g.mvMatrix.translate(0,0.5,-11);
+	g.mvMatrix.multiply(g.rotMatrix);	
+	g.mvMatrix.rotate(20,1,0,0);
+	g.mvMatrix.rotate(g.currentAngle, 0,1,0);
+
+        // Construct the model-view * projection matrix and pass it in
+	g.mvpMatrix.makeIdentity();
+        g.mvpMatrix.multiply(g.perspectiveMatrix);
+        g.mvpMatrix.multiply(g.mvMatrix);
+        g.mvpMatrix.setUniform(gl, g.u_modelViewProjMatrixLoc, false);
+	
+        gl.drawElements(gl.TRIANGLES, g.numTriangles, gl.UNSIGNED_SHORT, 0);
+
+        // Show the framerate
+        framerate.snapshot();
+	g.currentAngle += g.incAngle;
+	if (g.currentAngle >= 360) g.currentAngle -= 360;
+        }
+    }
+
+    function qMultiply(q1, q2) {
+	return [q1[0]*q2[0]-q1[1]*q2[1]-q1[2]*q2[2]-q1[3]*q2[3],
+		q1[0]*q2[1]+q1[1]*q2[0]+q1[2]*q2[3]-q1[3]*q2[2],
+		q1[0]*q2[2]-q1[1]*q2[3]+q1[2]*q2[0]+q1[3]*q2[1],
+		q1[0]*q2[3]+q1[1]*q2[2]-q1[2]*q2[1]+q1[3]*q2[0]];
+    }
+
+    function qNormalize(q) {
+	var norm = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
+	if (norm != 0) return [q[0]/norm, q[1]/norm, q[2]/norm, q[3]/norm];
+	else return q;
+    }
+
+    function getrotq(p1, p2) {
+	var cross = [p1[1]*p2[2]-p1[2]*p2[1], -p1[0]*p2[2]+p1[2]*p2[0], p1[0]*p2[1]-p1[1]*p2[0]];
+	var norm1 = Math.sqrt(p1[0]*p1[0]+p1[1]*p1[1]+p1[2]*p1[2]);
+	var norm2 = Math.sqrt(p2[0]*p2[0]+p2[1]*p2[1]+p2[2]*p2[2]);
+	var dot = p1[0]*p2[0]+p1[1]*p2[1]+p1[2]*p2[2];
+	return [norm1*norm2+dot, cross[0], cross[1], cross[2]];
+    }
+
+    function lcmousemove(x, y) {
+	if (x*x+y*y > 40*40) {
+		var norm = Math.sqrt(x*x+y*y);
+		x = 40*x/norm;
+		y = 40*y/norm;
+	}
+	g.light = [x/40.0,Math.sqrt(1.01-(x/40.0)*(x/40.0)-(y/40.0)*(y/40.0)),y/40.0];
+	gl.uniform3f(g.lightLocation, g.light[0], g.light[1], g.light[2]);
+	g.ctx.clearRect(0,0,150,150);
+	g.ctx.fillStyle = "#808080";
+	g.ctx.beginPath();
+	g.ctx.arc(75, 75, 40, 0, 2*Math.PI, false);
+	g.ctx.fill();
+	g.ctx.fillStyle = "#DC143C";
+	g.ctx.beginPath();
+	g.ctx.arc(x+75, y+75, 5, 0, 2*Math.PI, false);
+	g.ctx.fill();
+	g.ctx.font = '16px Serif';
+	g.ctx.textAlign = 'center';
+        g.ctx.fillStyle = 'white';
+        g.ctx.fillText('Light position:', 75, 20);
+    }
+
+    function highmousemove(x,y) {
+	if (x <= 135 && x >=15) {
+		g.highctx.clearRect(0,0,150,20);
+		var grd = g.highctx.createLinearGradient(15,0,120,0);
+		grd.addColorStop(0,"#FF0808");
+		grd.addColorStop(0.333,"#08FF08");
+		grd.addColorStop(0.666,"#0808FF");
+		grd.addColorStop(1.0,"#FF0808");
+		g.highctx.fillStyle = grd;
+		g.highctx.fillRect(15,7,120,6);
+		g.highctx.fillStyle = "#DC143C";
+		g.highctx.beginPath();
+		g.highctx.arc(x,10,5,0,2*Math.PI,false);
+		g.highctx.fill();
+		var xscale = (x-15)/40.0;
+		if (xscale <= 1) {
+			var sf = 1.2*Math.max(1-xscale,xscale);
+			g.hColor = [(1-xscale)/sf, xscale/sf,0];
+		} else if (xscale <= 2) {
+			var sf = 1.2*Math.max(2-xscale,xscale-1);
+			g.hColor = [0,(2-xscale)/sf,(xscale-1)/sf];
+		} else {
+			var sf = 1.2*Math.max(xscale-2,3-xscale);
+			g.hColor = [(xscale-2)/sf,0,(3-xscale)/sf];
+		}	
+		gl.uniform3f(g.hColorLoc, g.hColor[0], g.hColor[1], g.hColor[2]);
+	}
+    }
+
+    function lowmousemove(x,y ) {
+	if (x <= 135 && x >=15) {
+		g.lowctx.clearRect(0,0,150,20);
+		var grd = g.lowctx.createLinearGradient(15,0,120,0);
+		grd.addColorStop(0,"#FF0303");
+		grd.addColorStop(0.333,"#03FF03");
+		grd.addColorStop(0.666,"#0303FF");
+		grd.addColorStop(1.0,"#FF0303");
+		g.lowctx.fillStyle = grd;
+		g.lowctx.fillRect(15,7,120,6);
+		g.lowctx.fillStyle = "#DC143C";
+		g.lowctx.beginPath();
+		g.lowctx.arc(x,10,5,0,2*Math.PI,false);
+		g.lowctx.fill();
+		var xscale = (x-15)/40.0;
+		if (xscale <= 1) {
+			var sf = 1.2*Math.max(1-xscale,xscale);
+			g.lColor = [(1-xscale)/sf, xscale/sf,0];
+		} else if (xscale <= 2) {
+			var sf = 1.2*Math.max(2-xscale,xscale-1);
+			g.lColor = [0,(2-xscale)/sf,(xscale-1)/sf];
+		} else {
+			var sf = 1.2*Math.max(xscale-2,3-xscale);
+			g.lColor = [(xscale-2)/sf,0,(3-xscale)/sf];
+		}	
+		gl.uniform3f(g.lColorLoc, g.lColor[0], g.lColor[1], g.lColor[2]);
+	}
+    }
+
+    function hcmousemove(x,y) {
+	if (x <= 135 && x >=15) {
+		g.hctx.clearRect(0,0,150,20);
+		g.hctx.fillStyle = "#808080";
+		g.hctx.fillRect(15,7,120,6);
+		g.hctx.fillStyle = "#DC143C";
+		g.hctx.beginPath();
+		g.hctx.arc(x,10,5,0,2*Math.PI,false);
+		g.hctx.fill();
+		g.hscale = 1+3*(x-15)/120;
+		gl.uniform1f(g.hscaleLocation, g.hscale);
+		var num = g.hscale.toPrecision(2);
+		document.getElementById("hcvalue").innerHTML = num.toString();
+	}
+    }
+	
+    function pageMouseUp (event) {
+	g.lcDrag = false;
+	g.hcDrag = false;
+	g.highDrag = false;
+	g.lowDrag = false;
+	g.leftButtonDrag = false;
+	g.rightButtonDrag = false;
+    }
+	
+    function handleScroll(evt){
+	var delta = evt.wheelDelta ? evt.wheelDelta/40 : evt.detail ? -evt.detail : 0;
+	if (delta) {
+		var rect = g.maincanvas.getBoundingClientRect();
+		var sfact = g.fovangletan/(rect.height/2.0)/25;
+		var x = -evt.clientX+rect.width/2.0+rect.left;
+		var y = evt.clientY-rect.height/2.0-rect.top;
+		g.zoomvec.load(delta*x*sfact,delta*y*sfact,delta/25);
+		g.zoomvec.multVecMatrix(g.panMatrixInv);
+		g.zoomMatrix.translate(g.zoomvec[0],g.zoomvec[1],g.zoomvec[2]);
+	}
+    }
+
+    function pan(x,y) {
+	var rect = g.maincanvas.getBoundingClientRect();
+	var x1 = -g.dragBaseX+rect.width/2.0+rect.left;
+	var y1 = g.dragBaseY-rect.height/2.0-rect.top;
+	var x2 = -x+rect.width/2.0+rect.left;
+	var y2 = y-rect.height/2.0-rect.top;
+	var sfact = g.fovangletan/(rect.height/2.0);
+	var p1 = [sfact*x1,sfact*y1,1.0];
+	var p2 = [sfact*x2,sfact*y2,1.0];
+	var q1 = getrotq(p2,p1);
+	g.curCamQ = qMultiply(g.baseCamQ,q1);
+    }
+
+    function rotate(x,y) {
+	var dx = x-g.dragBaseX;
+	var dy = y-g.dragBaseY;
+	var norm = Math.sqrt(dx*dx+dy*dy);
+	dx = dx/norm;
+	dy = dy/norm;
+	g.curRotQ = qMultiply(g.baseRotQ,[Math.cos(norm/100),dy*Math.sin(norm/100),0,dx*Math.sin(norm/100)]);	
+    }
+   
+    function handleMouseDown(evt){
+	if (evt.button==0) {
+		g.leftButtonDrag = true;
+		g.dragBaseX = evt.clientX;
+		g.dragBaseY = evt.clientY;
+		g.baseCamQ = g.curCamQ;
+	} else if (evt.button==2) {
+		g.rightButtonDrag = true;
+		g.dragBaseX = evt.clientX;
+		g.dragBaseY = evt.clientY;
+		g.baseRotQ = g.curRotQ;
+	}
+    }
+
+    function handlemousemove(event){
+	if (g.leftButtonDrag) {
+		pan(event.clientX,event.clientY);
+	}
+	if (g.rightButtonDrag) {
+		rotate(event.clientX,event.clientY);
+	}
+	if (g.lcDrag==true) {	
+	var rect = g.lccanvas.getBoundingClientRect();
+	var x = event.clientX-rect.left-75;
+	var y = event.clientY-rect.top-75;
+	lcmousemove(x,y);
+	}
+	if (g.hcDrag ==true) {	
+	var rect = g.hccanvas.getBoundingClientRect();
+	var x = event.clientX-rect.left;
+	var y = event.clientY-rect.top;
+	hcmousemove(x,y);
+	}
+	if (g.highDrag==true) {
+	var rect = g.highcanvas.getBoundingClientRect();
+	var x = event.clientX-rect.left;
+	var y = event.clientY-rect.top;	
+	highmousemove(x,y);
+	}
+	if (g.lowDrag == true) {
+	var rect = g.lowcanvas.getBoundingClientRect();
+	var x = event.clientX-rect.left;
+	var y = event.clientY-rect.top;	 
+	lowmousemove(x,y);
+	}
+    }
+    
+
+    function start()
+    {
+        g.maincanvas = document.getElementById("example");
+	g.curCamQ= [1.0,0.0,0.0,0.0];
+	g.controls = document.getElementById("controls");
+	g.curRotQ= [1.0,0.0,0.0,0.0];
+
+	g.leftButtonDrag = false;
+	g.rightButtonDrag = false;
+        g.maincanvas.addEventListener('webglcontextlost', handleContextLost, false);
+        g.maincanvas.addEventListener('webglcontextrestored', handleContextRestored, false);
+	g.maincanvas.addEventListener('DOMMouseScroll',handleScroll,false);
+        g.maincanvas.addEventListener('mousewheel',handleScroll,false);
+	g.maincanvas.addEventListener("mousedown",handleMouseDown,false);
+	g.maincanvas.addEventListener("mousemove",handlemousemove,false);
+
+        init();
+        if (!gl) {
+           return;
+        }
+
+	g.lccanvas = document.getElementById("lccanvas");
+	g.ctx = g.lccanvas.getContext("2d");
+	lcmousemove(20,0);
+	g.lowcanvas = document.getElementById("lowcanvas");
+	g.lowctx = g.lowcanvas.getContext("2d");
+	lowmousemove(55,10);
+	g.highcanvas = document.getElementById("highcanvas");
+	g.highctx = g.highcanvas.getContext("2d");
+	highmousemove(15,10);
+	g.hccanvas = document.getElementById("hccanvas");
+	g.hctx = hccanvas.getContext("2d");
+	hcmousemove(15,10);
+	g.lcDrag = false;
+	g.hcDrag = false;
+	g.highDrag = false;
+	g.lowDrag = false;
+	 
+	g.controls.addEventListener("mousemove", handlemousemove, false);
+	g.framerate = document.getElementById("framerate");
+	g.framerate.addEventListener("mousemove",handlemousemove,false);
+	g.lccanvas.addEventListener("mousedown", function (event) {g.lcDrag = true;
+		handlemousemove(event);}, false);
+	g.hccanvas.addEventListener("mousedown", function (event) {g.hcDrag = true;
+		handlemousemove(event);}, false);
+	g.highcanvas.addEventListener("mousedown", function (event) {g.highDrag = true;
+		handlemousemove(event);}, false);
+	g.lowcanvas.addEventListener("mousedown", function (event) {g.lowDrag = true;
+		handlemousemove(event);}, false);
+		
+	document.documentElement.onmouseup = pageMouseUp;
+	document.documentElement.onmouseleave = pageMouseUp;
+
+        g.currentAngle = 0;
+	spinBox = document.getElementById("Spin");
+	spin();
+        framerate = new Framerate("framerate");
+        var f = function() {
+            drawPicture();
+            requestId = window.requestAnimFrame(f, g.maincanvas);
+        };
+        f();
+	
+        function handleContextLost(e) {
+            e.preventDefault();
+            clearLoadingImages();
+            if (requestId !== undefined) {
+                window.cancelAnimFrame(requestId);
+                requestId = undefined;
+            }
+	    initialized = false;
+	    clearInterval(g.iterator);
+        }
+
+        function handleContextRestored() {
+            init();
+            f();
+        }
+    }
+
+    function spin() {
+	if (spinBox.checked == 0) {
+		g.incAngle = 0;
+	} else {
+		g.incAngle = 0.5;
+	}
+    }
+</script>
+</head>
+
+<body onload="start()">
+<canvas id="example" oncontextmenu="return false;">
+    If you're seeing this your web browser doesn't support the &lt;canvas>&gt; element. Ouch!
+</canvas>
+<div id="framerate"></div>
+<div id="controls">
+<center>
+<canvas id="lccanvas" width="150px" height="150px"></canvas>
+</center>
+<br>
+<br>
+<center>Low elevation color:</center>
+<center><canvas id="lowcanvas" width="150px" height="20px"></canvas></center>
+<br>
+<center>High elevation color:</center>
+<center><canvas id="highcanvas" width="150px" height="20px"></canvas></center>
+<br>
+<center>Vertical scale: <div id="hcvalue">1.0</div> </center>
+<center><canvas id="hccanvas" width="150px" height="20px"></canvas></center>
+<br>
+<br>
+<center>
+<label>
+<input type="Checkbox" id="Spin" name="Spin" value="Spin" onclick="spin()" checked="true">Spin terrain
+</label>
+</center>
+</div>
+<section id="loading"><h1>Loading map data...</h1></section>
+</body>
+
+</html>
