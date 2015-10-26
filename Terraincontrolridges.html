@@ -129,11 +129,13 @@ section {
     uniform mat4 u_modelViewProjMatrix;
 
     void main()
-    {
+    {  
+	float stepper = (1.-max(sign(abs(n1.x)),max(sign(abs(n1.y)),
+	sign(abs(n1.z)))))*(1.-max(sign(abs(n2.x)),max(sign(abs(n2.y)),sign(abs(n2.z)))));
 	float d1 = dot(camPosition-vp,n1);
 	float d2 = dot(camPosition-vp,n2);
-	float alpha = step(0.,-d1*d2);
-	vc = vec4(0.,0.,1.,alpha);
+	float alpha = max(stepper,max(0.,-sign(d1)*sign(d2)));
+	vc = vec4(stepper,stepper,1.,alpha);
 	gl_Position = u_modelViewProjMatrix * vec4(vp, 1.);
     }
 </script>
@@ -347,89 +349,84 @@ section {
 	var edgedict = {};
 	var normalsarray = [];
 	var pointsarray = [];
-	for (i = 0; i < g.numTriangles; i++) {
+	for (i = 0; i < g.numTriangles/3; i++) {
 	var i1 = triangleList[3*i];
 	var i2 = triangleList[3*i+1];
 	var i3 = triangleList[3*i+2];
 	var v1 = [coords[3*i1]-coords[3*i3], coords[3*i1+1]-coords[3*i3+1], coords[3*i1+2]-coords[3*i3+2]];
 	var v2 = [coords[3*i2]-coords[3*i3], coords[3*i2+1]-coords[3*i3+1], coords[3*i2+2]-coords[3*i3+2]];
 	var cross = [v1[1]*v2[2]-v1[2]*v2[1], -v1[0]*v2[2]+v2[0]*v1[2], v1[0]*v2[1]-v1[1]*v2[0]];
+	if (cross[1] < 0) cross = [-cross[0], -cross[1], -cross[2]];
 	if (i1 < i2) {
 	if (edgedict[i1*100000+i2] == null) edgedict[i1*100000+i2] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i1]);
+	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i2]);
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i1]);
+	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i2]);
 	pointsarray.push.apply(pointsarray, [coords[3*i1], coords[3*i1+1], coords[3*i1+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i2], coords[3*i2+1], coords[3*i2+2]]);
-	edgedict[i1*100000+i2] = null;
-	edgedict[i2*100000+i1] = null;
+	delete edgedict[i1*100000+i2];
 	}
 	}
 	else {
 	if (edgedict[i2*100000+i1] == null) edgedict[i2*100000+i1] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i2]);
+	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i1]);
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i2]);
+	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i1]);
 	pointsarray.push.apply(pointsarray, [coords[3*i1], coords[3*i1+1], coords[3*i1+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i2], coords[3*i2+1], coords[3*i2+2]]);
-	edgedict[i1*100000+i2] = null;
-	edgedict[i2*100000+i1] = null;
+	delete edgedict[i2*100000+i1];
 	}
 	}
 	if (i1 < i3) {
 	if (edgedict[i1*100000+i3] == null) edgedict[i1*100000+i3] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i1]);
+	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i3]);
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i1]);
+	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i3]);
 	pointsarray.push.apply(pointsarray, [coords[3*i1], coords[3*i1+1], coords[3*i1+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i3], coords[3*i3+1], coords[3*i3+2]]);
-	edgedict[i1*100000+i3] = null;
-	edgedict[i3*100000+i1] = null;
+	delete edgedict[i1*100000+i3];
 	}
 	}
 	else {
 	if (edgedict[i3*100000+i1] == null) edgedict[i3*100000+i1] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i1*100000+i3]);
+	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i1]);
 	normalsarray.push.apply(normalsarray, cross);
 	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i1]);
 	pointsarray.push.apply(pointsarray, [coords[3*i1], coords[3*i1+1], coords[3*i1+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i3], coords[3*i3+1], coords[3*i3+2]]);
-	edgedict[i1*100000+i3] = null;
-	edgedict[i3*100000+i1] = null;
+	delete edgedict[i3*100000+i1];
 	}
 	}
 	if (i2 < i3) {
 	if (edgedict[i2*100000+i3] == null) edgedict[i2*100000+i3] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i2]);
+	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i3]);
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i2]);
+	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i3]);
 	pointsarray.push.apply(pointsarray, [coords[3*i2], coords[3*i2+1], coords[3*i2+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i3], coords[3*i3+1], coords[3*i3+2]]);
-	edgedict[i2*100000+i3] = null;
-	edgedict[i3*100000+i2] = null;
+	delete edgedict[i2*100000+i3];
 	}
 	}
 	else {
 	if (edgedict[i3*100000+i2] == null) edgedict[i3*100000+i2] = cross;
 	else {
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i3]);
+	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i2]);
 	normalsarray.push.apply(normalsarray, cross);
-	normalsarray.push.apply(normalsarray, edgedict[i2*100000+i3]);
+	normalsarray.push.apply(normalsarray, edgedict[i3*100000+i2]);
 	pointsarray.push.apply(pointsarray, [coords[3*i2], coords[3*i2+1], coords[3*i2+2]]);
 	pointsarray.push.apply(pointsarray, [coords[3*i3], coords[3*i3+1], coords[3*i3+2]]);
-	edgedict[i2*100000+i3] = null;
-	edgedict[i3*100000+i2] = null;
+	delete edgedict[i3*100000+i2];
 	}
 	}
 	}
@@ -441,17 +438,18 @@ section {
 	pointsarray.push.apply(pointsarray, [coords[3*y2], coords[3*y2+1], coords[3*y2+2]]);
 	}	
 
-	h.numLines = pointsarray.length/6;
+	h.numLines = pointsarray.length/3;
 
 	gl.useProgram(h.program);
+	gl.lineWidth(2);
 	gl.enableVertexAttribArray(3);
 	gl.enableVertexAttribArray(4);
 	gl.enableVertexAttribArray(5);
 	var hnormalBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, hnormalBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalsarray), gl.STATIC_DRAW);
-	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 4*3, 0);
-	gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 4*3, 4*3);
+	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 8*3, 0);
+	gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 8*3, 4*3);
 	var hpointsBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, hpointsBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pointsarray), gl.STATIC_DRAW);
@@ -459,7 +457,6 @@ section {
 	h.camPositionLoc = gl.getUniformLocation(h.program, "camPosition");
 	h.mvpLoc = gl.getUniformLocation(h.program, "u_modelViewProjMatrix");
 
-	initialized = true;
     }
 
     var requestId;
@@ -479,7 +476,6 @@ section {
 	var fovangle = 30;
         g.perspectiveMatrix.perspective(fovangle, g.maincanvas.clientWidth / g.maincanvas.clientHeight, 0.1, 100);
 	g.fovangletan = Math.tan(Math.PI*fovangle/360);
-	var m = g.perspectiveMatrix.getAsArray();
 	updateMatrices = true;
     }
 
@@ -568,6 +564,7 @@ section {
 	if (g.incAngle != 0) updateMatrices = true;
         }
 	}
+	gl.useProgram(g.program);
     }
 
     //pared-down version of getCurrentFrame() that we call for updating the GPS coordinates
