@@ -194,7 +194,7 @@ function drawScene() {
 		sf = 1000;
 		index = indices[i];
 		if (1.5*zArray[index]+10 > 0.1) {
-			sf = Math.abs(1.5*zArray[index]+10);
+			sf = 1.5*zArray[index]+10;
 		}
 		color1 = "rgb("+ptsArrayR[index]+","+ptsArrayG[index]+
 		","+ptsArrayB[index]+")";
