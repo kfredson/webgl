@@ -130,11 +130,15 @@ section {
 
     void main()
     {  
+	//stepper equals 1 if n1 and n2 are nonzero, and 0 if either is zero, which we take to mean that the line is on the map edge
+	//and thus color it white
 	float stepper = (1.-max(sign(abs(n1.x)),max(sign(abs(n1.y)),
 	sign(abs(n1.z)))))*(1.-max(sign(abs(n2.x)),max(sign(abs(n2.y)),sign(abs(n2.z)))));
-	float d1 = dot(camPosition-vp,n1);
-	float d2 = dot(camPosition-vp,n2);
-	float alpha = max(stepper,max(0.,-sign(d1)*sign(d2)));
+	vec3 ncam = normalize(camPosition-vp);	
+	float d1 = dot(ncam,n1);
+	float d2 = dot(ncam,n2);
+	float a = max(0.,-sign(d1)*sign(d2))*abs(d1-d2)/2.;
+	float alpha = max(stepper,a);
 	vc = vec4(stepper,stepper,1.,alpha);
 	gl_Position = u_modelViewProjMatrix * vec4(vp, 1.);
     }
@@ -357,6 +361,8 @@ section {
 	var v2 = [coords[3*i2]-coords[3*i3], coords[3*i2+1]-coords[3*i3+1], coords[3*i2+2]-coords[3*i3+2]];
 	var cross = [v1[1]*v2[2]-v1[2]*v2[1], -v1[0]*v2[2]+v2[0]*v1[2], v1[0]*v2[1]-v1[1]*v2[0]];
 	if (cross[1] < 0) cross = [-cross[0], -cross[1], -cross[2]];
+	var norm = Math.sqrt(cross[0]*cross[0]+cross[1]*cross[1]+cross[2]*cross[2]);
+	cross = [cross[0]/norm,cross[1]/norm,cross[2]/norm];
 	if (i1 < i2) {
 	if (edgedict[i1*100000+i2] == null) edgedict[i1*100000+i2] = cross;
 	else {
