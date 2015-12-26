@@ -114,7 +114,7 @@ function handleMouseMove(evt) {
 			dx = dx/norm;
 			dy = dy/norm;
 		}
-		q2 = [Math.cos(norm/200),-dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0];
+		q2 = [Math.cos(norm/200),dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0];
 		curRotQ = qNormalize(qMultiply(q2,baseRotQ));
 		qr = curRotQ[0]; qi = curRotQ[1]; qj = curRotQ[2]; qk = curRotQ[3];
 		curRotMatrix = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr),
