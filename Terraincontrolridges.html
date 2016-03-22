@@ -115,13 +115,14 @@ section {
 	vec3 norm = normalize(vn);
 	float dp = clamp(dot(norm,lightDir),0.0,1.0);
 	vec3 color = dp*vc+specular*shininess*(0.3,0.3,0.3);
-        gl_FragColor = vec4(color,1.0);
+        gl_FragColor = vec4(color.x,color.y,0.0,1.0);
     }
 </script>
 
 <script id="shader-vs-ridges" type="x-shader/x-vertex">
     precision mediump float;
     uniform vec3 camPosition;
+    uniform float hscale;
     attribute vec3 n1;
     attribute vec3 n2;
     attribute vec3 vp;
@@ -130,13 +131,16 @@ section {
 
     void main()
     {  
-	float stepper = (1.-max(sign(abs(n1.x)),max(sign(abs(n1.y)),
-	sign(abs(n1.z)))))*(1.-max(sign(abs(n2.x)),max(sign(abs(n2.y)),sign(abs(n2.z)))));
-	float d1 = dot(camPosition-vp,n1);
-	float d2 = dot(camPosition-vp,n2);
+	vec3 N1 = vec3(hscale*n1.x,n1.y,hscale*n1.z);
+	vec3 N2 = vec3(hscale*n2.x,n2.y,hscale*n2.z);
+	vec3 VP = vec3(vp.x,hscale*vp.y,vp.z);
+	float stepper = (1.-max(sign(abs(N1.x)),max(sign(abs(N1.y)),
+	sign(abs(N1.z)))))*(1.-max(sign(abs(N2.x)),max(sign(abs(N2.y)),sign(abs(N2.z)))));
+	float d1 = dot(camPosition-VP,N1);
+	float d2 = dot(camPosition-VP,N2);
 	float alpha = max(stepper,max(0.,-sign(d1)*sign(d2)));
 	vc = vec4(stepper,stepper,1.,alpha);
-	gl_Position = u_modelViewProjMatrix * vec4(vp, 1.);
+	gl_Position = u_modelViewProjMatrix * vec4(vp.x,hscale*vp.y,vp.z, 1.);
     }
 </script>
 
@@ -206,23 +210,38 @@ section {
         if (!gl) {
           return;
         }
-        g.program = simpleSetup(
+        /* g.program = simpleSetup(
             gl,
             // The ids of the vertex and fragment shaders
             "vshader", "fshader",
             // The vertex attribute names used by the shaders.
             // The order they appear here corresponds to their index
             // used later.
-            [ "vNormal", "vColor", "vPosition"],
+            [ "n1", "n2", "vPosition"],
             // The clear color and depth values
-            [ 0.3, 0.3, 0.3, 1 ], 10000);
+            [ 0.3, 0.3, 0.3, 1 ], 10000); */
+	g.program = gl.createProgram();
+	gl.bindAttribLocation(g.program, 0, "vNormal");
+	gl.bindAttribLocation(g.program, 1, "vColor");
+	gl.bindAttribLocation(g.program, 2, "vPosition");
+	gl.attachShader(g.program, getShader(gl, "vshader"));
+	gl.attachShader(g.program, getShader(gl, "fshader"));
+	gl.linkProgram(g.program);
+	gl.useProgram(g.program);
+	gl.clearColor(0.3,0.3,0.3,1);	
+	gl.clearDepth(10000);
+	gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+	
 	h.program = gl.createProgram();
-	gl.bindAttribLocation(h.program, 3, "n1");
-	gl.bindAttribLocation(h.program, 4, "n2");
-	gl.bindAttribLocation(h.program, 5, "vp");
+        gl.bindAttribLocation(h.program, 0, "n1");
+	gl.bindAttribLocation(h.program, 3, "n2");
+	gl.bindAttribLocation(h.program, 4, "vp");
 	gl.attachShader(h.program, getShader(gl, "shader-vs-ridges"));
 	gl.attachShader(h.program, getShader(gl, "shader-fs-ridges"));
 	gl.linkProgram(h.program);
+	gl.useProgram(h.program);
 
 	JSZipUtils.getBinaryContent(g.modelname,continueInit);
 
@@ -274,14 +293,17 @@ section {
 	g.invMatrix = new J3DIMatrix4();
 	g.lastDate = 0;
 
+	gl.useProgram(g.program);
 	// Enable all of the vertex attribute arrays.
-        gl.enableVertexAttribArray(0);
-        gl.enableVertexAttribArray(1);
-        gl.enableVertexAttribArray(2);
+	gl.enableVertexAttribArray(0);
+	gl.enableVertexAttribArray(1);
+	gl.enableVertexAttribArray(2);
+        gl.enableVertexAttribArray(3);
+        gl.enableVertexAttribArray(4);
 	
 	// Set up all the vertex attributes for vertices, normals and texCoords
-	var normalBuffer = gl.createBuffer();        
-	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+	g.normalBuffer = gl.createBuffer();        
+	gl.bindBuffer(gl.ARRAY_BUFFER, g.normalBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 	
@@ -294,6 +316,7 @@ section {
 	gl.bindBuffer(gl.ARRAY_BUFFER, coordBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coords), gl.STATIC_DRAW);
 	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+	console.log(coords.length/3);
 
 	var indexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
@@ -442,20 +465,20 @@ section {
 
 	gl.useProgram(h.program);
 	gl.lineWidth(2);
-	gl.enableVertexAttribArray(3);
-	gl.enableVertexAttribArray(4);
-	gl.enableVertexAttribArray(5);
-	var hnormalBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, hnormalBuffer);
+
+	h.normalBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, h.normalBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalsarray), gl.STATIC_DRAW);
-	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 8*3, 0);
-	gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 8*3, 4*3);
-	var hpointsBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, hpointsBuffer);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 8*3, 0); //3
+	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 8*3, 4*3); //4
+	h.pointsBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, h.pointsBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pointsarray), gl.STATIC_DRAW);
-	gl.vertexAttribPointer(5, 3, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 0, 0); //5
 	h.camPositionLoc = gl.getUniformLocation(h.program, "camPosition");
 	h.mvpLoc = gl.getUniformLocation(h.program, "u_modelViewProjMatrix");
+	h.hscaleLoc = gl.getUniformLocation(h.program, "hscale");
+	gl.uniform1f(h.hscaleLoc, g.hscale);
 
     }
 
@@ -548,12 +571,16 @@ section {
         g.mvpMatrix.setUniform(gl, g.u_modelViewProjMatrixLoc, false);
 	updateMatrices = false;
 	}
-	
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, g.normalBuffer);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);	
         gl.drawElements(gl.TRIANGLES, g.numTriangles, gl.UNSIGNED_SHORT, 0);
 
 	gl.useProgram(h.program);
 	gl.uniform3f(h.camPositionLoc,m[12],m[13],m[14]);
 	g.mvpMatrix.setUniform(gl, h.mvpLoc, false);
+	gl.bindBuffer(gl.ARRAY_BUFFER, h.normalBuffer);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 8*3, 0);
 	gl.drawArrays(gl.LINES, 0, h.numLines);
 
         // Show the framerate
@@ -807,7 +834,10 @@ section {
 	g.hctx.arc(x,10,5,0,2*Math.PI,false);
 	g.hctx.fill();
 	g.hscale = 1+(x-75)/60;
+	gl.useProgram(g.program);
 	gl.uniform1f(g.hscaleLocation, g.hscale);
+	gl.useProgram(h.program);
+	gl.uniform1f(h.hscaleLoc, g.hscale);
 	var num = g.hscale.toPrecision(2);
 	document.getElementById("hcvalue").innerHTML = num.toString();
 	}
@@ -825,6 +855,7 @@ section {
 	g.sctx.arc(x,10,5,0,2*Math.PI,false);
 	g.sctx.fill();
 	var s = (x-15)/120;
+	gl.useProgram(g.program);
 	gl.uniform1f(g.shininessLoc, s);
 	var num = s.toPrecision(2);
 	document.getElementById("shininess").innerHTML = num.toString();
@@ -1225,13 +1256,13 @@ Camera angle:
 <div style="float:right">Source data: USGS 1/3 arc second DEM files</div>
 <br>
 <a href="javascript:void(0)" style="color: #FFFFFF" onclick="if (initialized) {initialized = false; 
-document.getElementById('title').innerHTML = '<h2>Zion Canyon, Utah</h2>'; start('zion.zip');}">Zion Canyon (1.4mb)</a>
+document.getElementById('title').innerHTML = '<h2>Zion Canyon, Utah</h2>'; start('zion.zip');}">Zion Canyon (1.7mb)</a>
 <a href="javascript:void(0)" style="color: #FFFFFF" onclick="if (initialized) { initialized = false; 
 document.getElementById('title').innerHTML = '<h2>Mount Whitney, California</h2>'; start('whitney.zip');}">Mount Whitney (1.0mb)</a>
 <a href="javascript:void(0)" style="color: #FFFFFF" onclick="if (initialized) { initialized = false; 
 document.getElementById('title').innerHTML = '<h2>Red Rock Canyon, Nevada</h2>'; start('redrock.zip');}">Red Rock Canyon (1.0mb)</a>
 <a href="javascript:void(0)" style="color: #FFFFFF" onclick="if (initialized) { initialized = false; 
-document.getElementById('title').innerHTML = '<h2>Yosemite Valley, California</h2>'; start('yosemite.zip');}">Yosemite Valley (900kb)</a>
+document.getElementById('title').innerHTML = '<h2>Yosemite Valley, California</h2>'; start('yosemite.zip');}">Yosemite Valley (1.1mb)</a>
 </div>
 <div id="title"><h2>Red Rock Canyon, Nevada</h2></div>
 </body>
