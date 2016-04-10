@@ -311,6 +311,7 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 		vol += sphereValuesArray[i];
 		speedArray[i] = 0.0;
 	}
+
     }
 
     function pulse() {
@@ -337,27 +338,6 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-	projectionMatrix.makeIdentity();
-        projectionMatrix.perspective(45, maincanvas.clientWidth / maincanvas.clientHeight, 0.1, 100.0);
-
-        modelviewMatrix.makeIdentity();
-	modelviewMatrix.translate(0,0,-5);
-	curRotQ = qNormalize(curRotQ);
-	qr = curRotQ[0];
-	qi = curRotQ[1];
-	qj = curRotQ[2];
-	qk = curRotQ[3];
-	m = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
-		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
-		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
-		0, 0, 0, 1];
-	rotMatrix.load(m);
-	gl.uniformMatrix3fv(shaderProgram.mvMatrixUniform, false, [m[0],m[1],m[2],m[4],m[5],m[6],m[8],m[9],m[10]]);
-	modelviewMatrix.multiply(rotMatrix);
-	
-	projectionMatrix.multiply(modelviewMatrix);
-	projectionMatrix.setUniform(gl, shaderProgram.mvpMatrixUniform, false);
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, sphereValuesBuffer);
 	gl.bufferSubData(gl.ARRAY_BUFFER, 0, sphereValuesArray);
@@ -419,6 +399,7 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 
     var maincanvas;
     var lastdate = Date.now();
+    var projmat = new J3DIMatrix4();
 
     function webGLStart() {
         maincanvas = document.getElementById("example");
@@ -436,6 +417,16 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	maincanvas.addEventListener("mousemove",handleMouseMove,false);
 	document.documentElement.onmouseup = function() {rightButtonDrag = false};
 	document.documentElement.onmouseleave = function() {rightButtonDrag = false};
+
+	projmat.perspective(45, maincanvas.clientWidth / maincanvas.clientHeight, 0.1, 100.0);
+	gl.uniformMatrix3fv(shaderProgram.mvMatrixUniform, 
+	false, [1,0,0,0,1,0,0,0,1]);
+        modelviewMatrix.makeIdentity();
+	modelviewMatrix.translate(0,0,-5);
+	
+	projectionMatrix.load(projmat);
+	projectionMatrix.multiply(modelviewMatrix);
+	projectionMatrix.setUniform(gl, shaderProgram.mvpMatrixUniform, false);	
 
         tick();
     }
@@ -523,7 +514,25 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	dx = dx/norm;
 	dy = dy/norm;
 	}
-	curRotQ = qMultiply(baseRotQ,[Math.cos(norm/200),-dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0]);	
+	curRotQ = qMultiply(baseRotQ,[Math.cos(norm/200),-dy*Math.sin(norm/200),-dx*Math.sin(norm/200),0]);
+		modelviewMatrix.load([1,0,0,0,0,1,0,0,0,0,1,0,0,0,-5,1]);
+	curRotQ = qNormalize(curRotQ);
+	qr = curRotQ[0];
+	qi = curRotQ[1];
+	qj = curRotQ[2];
+	qk = curRotQ[3];
+	mat = [1-2*qj*qj-2*qk*qk, 2*(qi*qj-qk*qr), 2*(qi*qk+qj*qr), 0,
+		2*(qi*qj+qk*qr), 1-2*qi*qi-2*qk*qk, 2*(qj*qk-qi*qr), 0,
+		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
+		0, 0, 0, 1];
+	rotMatrix.load(mat);
+	gl.uniformMatrix3fv(shaderProgram.mvMatrixUniform, 
+	false, [mat[0],mat[1],mat[2],mat[4],mat[5],mat[6],mat[8],mat[9],mat[10]]);
+	modelviewMatrix.multiply(rotMatrix);
+	
+	projectionMatrix.load(projmat);
+	projectionMatrix.multiply(modelviewMatrix);
+	projectionMatrix.setUniform(gl, shaderProgram.mvpMatrixUniform, false);		
     }
 
     function handleMouseDown(evt){
