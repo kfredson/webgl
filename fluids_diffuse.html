@@ -54,14 +54,26 @@ const float spacing = 1./512.;
 varying vec2 texCoord;
 void main(void) {
    vec4 current = texture2D(samp, texCoord);
-   vec4 nextul = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)-vec2(spacing/2.,spacing/2.));
-   vec4 nextur = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)-vec2(-spacing/2.,spacing/2.));
-   vec4 nextll = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)-vec2(spacing/2.,-spacing/2.));
-   vec4 nextlr = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)-vec2(-spacing/2.,-spacing/2.));
-   vec4 next = texture2D(samp, texCoord-0.01*vec2(current.x,current.y));
-   float xfract = fract(512.*0.01*current.x);
-   float yfract = fract(512.*0.01*current.y);
-   vec4 av = (nextul*yfract+nextll*(1.-yfract))*xfract+(nextur*(yfract)+nextlr*(1.-yfract))*(1.-xfract);
+   //The following scheme seems like it should work but doesn't!  Must be due to OpenGL's
+   //texture coordinate conventions.
+   //vec4 nextul = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,spacing/2.));
+   //vec4 nextur = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,spacing/2.));
+   //vec4 nextll = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,-spacing/2.));
+   //vec4 nextlr = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,-spacing/2.));
+   float xfrac = fract(-512.*0.01*current.x);
+   float yfrac = fract(-512.*0.01*current.y);
+   float xint = floor(-512.*0.01*current.x)/512.;
+   float yint = floor(-512.*0.01*current.y)/512.;
+   vec4 nextul = texture2D(samp, texCoord+vec2(xint+spacing,yint+spacing));
+   vec4 nextur = texture2D(samp, texCoord+vec2(xint,yint+spacing));
+   vec4 nextll = texture2D(samp, texCoord+vec2(xint+spacing,yint));
+   vec4 nextlr = texture2D(samp, texCoord+vec2(xint,yint));
+   float center = min(2.*xfrac,min(2.*yfrac,min(2.-2.*xfrac,2.-2.*yfrac)))/4.;
+   float lr = max(1.-xfrac-yfrac,0.);
+   float ll = max(xfrac-yfrac,0.);
+   float ur = max(yfrac-xfrac,0.);
+   float ul = max(xfrac+yfrac-1.,0.);
+   vec4 av = (ul+center)*nextul+(ll+center)*nextll+(ur+center)*nextur+(lr+center)*nextlr;
    
    gl_FragColor = vec4(
 		av.x,
@@ -129,7 +141,8 @@ precision mediump float;
     void main()
     {
 	vec4 tex = texture2D(samp, texCoord);
-	gl_FragColor = vec4(2.*tex.x,2.*tex.y,0.,1.);
+	//gl_FragColor = vec4(2.*abs(tex.x),2.*abs(tex.y),0.,1.);
+	gl_FragColor = vec4(2.*abs(tex.x),2.*abs(tex.y),0.,1.);
     }
 </script> 
 
@@ -254,7 +267,7 @@ var gl;
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			}*/
 			if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
-			pix[3*(x*m+y)]= 0.5;
+			pix[3*(x*m+y)]= -0.6;
 			} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
 			pix[3*(x*m+y)+1]= 0.5;
 			}
