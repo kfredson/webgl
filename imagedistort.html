@@ -114,9 +114,9 @@ var gl;
 		maincanvas.height = maincanvas.clientHeight;
 	}
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-	gl.activeTexture(gl.TEXTURE0);
+	gl.activeTexture(gl.TEXTURE4);
 	gl.bindTexture(gl.TEXTURE_2D, texture);
-	gl.uniform1i(gl.samplerUniform, 0);
+	gl.uniform1i(gl.samplerUniform, 4);
         gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
     }
 
@@ -141,6 +141,7 @@ var gl;
 	document.getElementById("loadinfo").innerHTML = "<br>";
 	initialized = false;
         ctx.drawImage(imageObj, 0, 0, 1024, 1024);
+	gl.activeTexture(gl.TEXTURE4);
 	gl.bindTexture(gl.TEXTURE_2D, texture);
     	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, 1024, 1024));
