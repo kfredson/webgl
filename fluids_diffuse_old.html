@@ -159,7 +159,8 @@ uniform sampler2D picsamp;
 varying vec2 texCoord;
 
 void main(void) {
-   gl_FragColor = texture2D(picsamp, texCoord-0.01*texture2D(samp,texCoord).xy);
+   vec2 x = 0.01*texture2D(samp, texCoord).xy;
+   gl_FragColor = texture2D(picsamp, texCoord-x);
 }
 </script> 
  
