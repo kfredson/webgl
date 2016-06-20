@@ -1,0 +1,660 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>WebGL Fluids</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(85,85,85);
+}
+#example {
+  width: 512px;
+  height: 512px;
+  float: left;
+}
+#text {
+  color: white;
+  float: left;
+}
+</style>
+<script id="shader-vs" type="x-shader/x-vertex"> 
+  precision mediump float;
+  uniform sampler2D samp;
+  attribute vec2 aTexCoord;
+  uniform float speed;
+  varying vec2 texCoord;
+void main()
+    {
+	gl_Position = vec4(aTexCoord, 0., 1.);
+	texCoord = vec2((aTexCoord.x+1.)/2., (aTexCoord.y+1.)/2.);
+    }
+</script> 
+
+<script id="shader-fs-fluid" type="x-shader/x-fragment"> 
+precision mediump float;
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   vec4 current = texture2D(samp, texCoord);
+   //The following scheme seems like it should work but doesn't!  Must be due to OpenGL's
+   //texture coordinate conventions.
+   //vec4 nextul = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,spacing/2.));
+   //vec4 nextur = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,spacing/2.));
+   //vec4 nextll = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,-spacing/2.));
+   //vec4 nextlr = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,-spacing/2.));
+   float xfrac = fract(-512.*0.01*current.x);
+   float yfrac = fract(-512.*0.01*current.y);
+   float xint = floor(-512.*0.01*current.x)/512.;
+   float yint = floor(-512.*0.01*current.y)/512.;
+   vec4 nextul = texture2D(samp, texCoord+vec2(xint+spacing,yint+spacing));
+   vec4 nextur = texture2D(samp, texCoord+vec2(xint,yint+spacing));
+   vec4 nextll = texture2D(samp, texCoord+vec2(xint+spacing,yint));
+   vec4 nextlr = texture2D(samp, texCoord+vec2(xint,yint));
+   float center = min(2.*xfrac,min(2.*yfrac,min(2.-2.*xfrac,2.-2.*yfrac)))/4.;
+   float lr = max(1.-xfrac-yfrac,0.);
+   float ll = max(xfrac-yfrac,0.);
+   float ur = max(yfrac-xfrac,0.);
+   float ul = max(xfrac+yfrac-1.,0.);
+   vec4 av = (ul+center)*nextul+(ll+center)*nextll+(ur+center)*nextur+(lr+center)*nextlr;
+   //vec4 left = texture2D(samp, texCoord+vec2(-spacing,0.));
+   //vec4 right = texture2D(samp, texCoord+vec2(spacing,0.));
+   //vec4 up = texture2D(samp, texCoord+vec2(0.,spacing));
+   //vec4 down = texture2D(samp, texCoord+vec2(0.,-spacing));
+   //vec4 lapl = left+right+up+down-4.*current;
+
+   gl_FragColor = vec4(
+		av.x, //+0.05*lapl.x,
+		av.y, //+0.05*lapl.y,
+		current.z,1.);
+}
+</script> 
+
+<script id="shader-fs-relax" type="x-shader/x-fragment"> 
+precision mediump                    float;		
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   vec4 left = texture2D(samp, texCoord+vec2(-spacing,0.));
+   vec4 right = texture2D(samp, texCoord+vec2(spacing,0.));
+   vec4 up = texture2D(samp, texCoord+vec2(0.,spacing));
+   vec4 down = texture2D(samp, texCoord+vec2(0.,-spacing));
+   vec4 current = texture2D(samp,texCoord); 
+   float uxX = (right.x-left.x)/2.;
+   float uyY = (up.y-down.y)/2.;
+   gl_FragColor = vec4(current.x,current.y,0.25*(left.z+right.z+up.z+down.z-uxX-uyY),1.);
+}
+</script> 
+
+<script id="shader-fs-project" type="x-shader/x-fragment">
+precision mediump                    float;		
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   float left = texture2D(samp, texCoord+vec2(-spacing,0.)).z;
+   float right = texture2D(samp, texCoord+vec2(spacing,0.)).z;
+   float up = texture2D(samp, texCoord+vec2(0.,spacing)).z;
+   float down = texture2D(samp, texCoord+vec2(0.,-spacing)).z;
+   vec4 cur = texture2D(samp, texCoord);
+   gl_FragColor = vec4(cur.x-(right-left)/2.,cur.y-(up-down)/2.,cur.z,1.);
+}
+</script>
+
+<script id="shader-fs-diffuse" type="x-shader/x-fragment"> 
+precision mediump float;
+const float spacing = 1./512.;		
+uniform sampler2D samp;
+uniform sampler2D diffsamp;
+varying vec2 texCoord;
+
+void main(void) {
+   vec4 left = texture2D(diffsamp, texCoord+vec2(-spacing,0.));
+   vec4 right = texture2D(diffsamp, texCoord+vec2(spacing,0.));
+   vec4 up = texture2D(diffsamp, texCoord+vec2(0.,spacing));
+   vec4 down = texture2D(diffsamp, texCoord+vec2(0.,-spacing));
+   vec4 ocurrent = texture2D(samp,texCoord);
+   gl_FragColor = vec4((ocurrent.xy-0.04*(left.xy+right.xy+up.xy+down.xy))/0.84,ocurrent.z,1.);
+}
+</script> 
+ 
+<script id="shader-fs-show" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+
+    void main()
+    {
+	vec4 tex = texture2D(samp, texCoord);
+	//gl_FragColor = vec4(2.*abs(tex.x),2.*abs(tex.y),0.,1.);
+	gl_FragColor = vec4(2.*abs(tex.x),2.*abs(tex.y),0.,1.);
+    }
+</script> 
+
+<script id="shader-fs-pic" type="x-shader/x-fragment"> 
+precision mediump float;
+		
+uniform sampler2D samp;
+uniform sampler2D picsamp;
+varying vec2 texCoord;
+
+void main(void) {
+   vec2 x = 0.01*texture2D(samp, texCoord).xy;
+   gl_FragColor = texture2D(picsamp, texCoord-x);
+}
+</script> 
+ 
+<script id="shader-fs-pic-show" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+
+    void main()
+    {
+	gl_FragColor = texture2D(samp, texCoord);
+	//gl_FragColor = vec4(1.d,0.,0.,1.);
+    }
+</script> 
+
+<script>
+var gl;
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+    var err = "Your browser does not support ";
+
+   var gl, canvas,
+    prog, prog_show, prog_pic, texture0, texture1, texture2, FBO0, FBO1, FBO2, samp, samp1_pic, samp2_pic, samp_show,
+    pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, currentSamp = 1, currentPicSamp = 3;
+ 
+   var pix = new Float32Array(3*m*m);
+
+   function initShaders() {
+	
+	var ext = gl.getExtension("OES_texture_float");
+   	if ( !ext ) {alert(err + "OES_texture_float extension"); return;}
+	
+        prog_show  = gl.createProgram();
+	gl.bindAttribLocation(prog_show, 0, "aTexCoord");
+	var mainVertexShader = getShader(gl, "shader-vs");
+        gl.attachShader(prog_show, mainVertexShader);
+        gl.attachShader(prog_show, getShader( gl, "shader-fs-show" ));
+        gl.linkProgram(prog_show);
+
+        gl.useProgram(prog_show);
+	samp_show = gl.getUniformLocation(prog_show, "samp");
+	gl.enableVertexAttribArray(0);
+	var trianglepts = [-1,-1,-1,1,1,1,1,-1];
+	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(trianglepts), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+        prog_fluids = gl.createProgram();
+	gl.bindAttribLocation(prog_fluids, 0, "aTexCoord");
+	gl.attachShader(prog_fluids, mainVertexShader);
+	gl.attachShader(prog_fluids, getShader(gl, "shader-fs-fluid"));
+	gl.linkProgram(prog_fluids);
+
+	prog_fluids.sampler = gl.getUniformLocation(prog_fluids, "samp");
+	gl.speedUniform = gl.getUniformLocation(prog_fluids, "speed");
+	gl.uniform1f(gl.speedUniform,0.5);
+
+	prog_relax = gl.createProgram();
+	gl.bindAttribLocation(prog_relax, 0, "aTexCoord");
+	gl.attachShader(prog_relax, mainVertexShader);
+	gl.attachShader(prog_relax, getShader(gl, "shader-fs-relax"));
+	gl.linkProgram(prog_relax);
+
+	prog_relax.sampler = gl.getUniformLocation(prog_relax, "samp");
+
+	prog_project = gl.createProgram();
+	gl.bindAttribLocation(prog_project, 0, "aTexCoord");
+	gl.attachShader(prog_project, mainVertexShader);
+	gl.attachShader(prog_project, getShader(gl, "shader-fs-project"));
+	gl.linkProgram(prog_project);
+
+	prog_project.sampler = gl.getUniformLocation(prog_project, "samp");
+
+	prog_diffuse = gl.createProgram();
+	gl.bindAttribLocation(prog_diffuse, 0, "aTexCoord");
+	gl.attachShader(prog_diffuse, mainVertexShader);
+	gl.attachShader(prog_diffuse, getShader(gl, "shader-fs-diffuse"));
+	gl.linkProgram(prog_diffuse);
+
+	prog_diffuse.samp = gl.getUniformLocation(prog_diffuse, "samp");
+	prog_diffuse.diffsamp = gl.getUniformLocation(prog_diffuse, "diffsamp");
+
+	prog_pic = gl.createProgram();
+	gl.bindAttribLocation(prog_pic, 0, "aTexCoord");
+	gl.attachShader(prog_pic, mainVertexShader);
+	gl.attachShader(prog_pic, getShader(gl, "shader-fs-pic"));
+	gl.linkProgram(prog_pic);
+	
+	prog_pic.samp = gl.getUniformLocation(prog_pic, "samp");
+	prog_pic.picsamp = gl.getUniformLocation(prog_pic, "picsamp");
+	
+	prog_pic_show = gl.createProgram();
+	gl.bindAttribLocation(prog_pic_show, 0, "aTexCoord");
+	gl.attachShader(prog_pic_show, mainVertexShader);
+	gl.attachShader(prog_pic_show, getShader(gl, "shader-fs-pic-show"));
+	gl.linkProgram(prog_pic_show);
+
+	prog_pic_show.samp = gl.getUniformLocation(prog_pic_show, "samp");
+	
+	texture2 = gl.createTexture();   	
+	texture1 = gl.createTexture();
+   	texture0 = gl.createTexture();
+   	FBO0 = gl.createFramebuffer();
+   	FBO1 = gl.createFramebuffer();
+	FBO2 = gl.createFramebuffer();
+
+	pictexture = gl.createTexture();
+	pictexture1 = gl.createTexture();
+	picFBO = gl.createFramebuffer();
+	picFBO1 = gl.createFramebuffer();
+
+	loadInitialValues();
+    }
+
+    function loadInitialValues() {
+	for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+			/* if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
+			pix[3*(x*m+y)+1] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			pix[3*(x*m+y)] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
+			} */
+			/* if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
+			pix[3*(x*m+y)+1]= 0.5;
+			} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
+			pix[3*(x*m+y)+1]= -0.3;
+			pix[3*(x*m+y)]= 0.3;
+			} */
+			var angle = Math.random();
+			var r = Math.random();
+			r = r*r;
+			pix[3*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
+			pix[3*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI); 
+		}
+	}
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture0);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, texture2);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture0, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture1, 0);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO2);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture2, 0);
+        if( gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+        alert(err + "FLOAT as the color attachment to an FBO");
+    }
+		
+    function drawScene() {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.useProgram(prog_show);
+	gl.uniform1i(prog_show.sampler, currentSamp);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+    }
+
+    function drawPic() {
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.useProgram(prog_pic_show);
+	gl.uniform1i(prog_pic_show.samp, currentPicSamp);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+    }
+
+    function tick() {
+        requestAnimFrame(tick, maincanvas);
+	gl.disable(gl.BLEND);
+        gl.disable(gl.DEPTH_TEST);
+        gl.viewport(0, 0, m, m);
+	if (!frozenanim) {	
+	if (!frozenvelocity) {	
+	draw(prog_fluids,1);
+	//diffuse(10);
+        draw(prog_relax,10);
+	draw(prog_project,1);
+	}
+	flowPic();
+	//drawScene();
+	drawPic();
+	}
+    }
+
+    function draw(glprogram,numiters) {
+	gl.useProgram(glprogram);
+	for (var i = 0; i < numiters; i++) {	
+	if (currentSamp==0) {
+	gl.uniform1i(glprogram.sampler, 0);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 1;
+	} else if (currentSamp == 1) {
+	gl.uniform1i(glprogram.sampler, 1);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO2);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 2;
+	} else if (currentSamp == 2) {
+	gl.uniform1i(glprogram.sampler, 2);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 0;
+	}
+	}
+    }
+
+    function diffuse(numiters) {
+	gl.useProgram(prog_diffuse);
+	gl.uniform1i(prog_diffuse.samp, currentSamp);
+	var cSamp = currentSamp;
+	currentSamp = (currentSamp+1)%3;
+	prevSamp = (currentSamp+1)%3;
+	var temp = 0;
+	for (var i = 0; i < numiters; i++) {	
+	if (currentSamp==1) {
+	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	temp = prevSamp;
+	prevSamp = currentSamp;
+	currentSamp = temp;
+	} else if (currentSamp == 0) {
+	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	temp = prevSamp;
+	prevSamp = currentSamp;
+	currentSamp = temp;
+	} else if (currentSamp == 2) {
+	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO2);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	temp = prevSamp;
+	prevSamp = currentSamp;
+	currentSamp = temp;
+	}
+	}
+    }
+
+    function flowPic() {
+	gl.useProgram(prog_pic);
+	if (currentPicSamp==3) {
+	gl.uniform1i(prog_pic.samp, currentSamp);
+	gl.uniform1i(prog_pic.picsamp, currentPicSamp); 
+	gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO1);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentPicSamp = 4;
+	} else { 
+	gl.uniform1i(prog_pic.samp, currentSamp);
+	gl.uniform1i(prog_pic.picsamp, currentPicSamp);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentPicSamp = 3;
+	}
+    }
+	
+
+    function loadImage(url) {
+	var imageObj = new Image();
+	imageObj.onload = function() {
+	invisibleCanvas.width=m;
+	invisibleCanvas.height=m;
+	var ctx = invisibleCanvas.getContext('2d');
+        ctx.drawImage(imageObj, 0, 0, m, m);
+	gl.viewport(0,0,m,m);
+	gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, pictexture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));      
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, pictexture1);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);        
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO1);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, pictexture1, 0);
+	gl.useProgram(prog_pic_show);
+	gl.uniform1i(prog_pic_show.samp, 3);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	
+	gl.activeTexture(gl.TEXTURE3);
+	gl.bindTexture(gl.TEXTURE_2D, pictexture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, pictexture, 0);
+	gl.uniform1i(prog_pic_show.samp, 4);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	tick();
+        };
+	imageObj.src = url;
+    }
+
+    var texturepix = new Uint8Array(3*m*m);
+
+    function loadGrid() {
+	var colorArrayR = [];
+	var colorArrayG = [];
+	var colorArrayB = [];
+	for (var i = 0; i < 64; i++) {
+		colorArrayR[i] = Math.floor(255*Math.random());
+		colorArrayG[i] = Math.floor(255*Math.random());
+		colorArrayB[i] = Math.floor(255*Math.random());
+	}
+	for (var i = 0; i < m; i++) {
+	for (var j = 0; j < m; j++) {
+		var p = Math.floor(8*j/m);	
+		var q = Math.floor(8*i/m);
+		if (p%2 != q%2) {
+			texturepix[3*(i+512*j)] = colorArrayR[p+4*q];
+			texturepix[3*(i+512*j)+1] = colorArrayG[p+4*q];
+			texturepix[3*(i+512*j)+2] = colorArrayB[p+4*q];
+		}	
+	}
+	}
+	gl.viewport(0,0,m,m);
+	gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, pictexture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texturepix);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.UNSIGNED_BYTE, texturepix);        
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, pictexture1);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);        
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO1);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, pictexture1, 0);
+	gl.useProgram(prog_pic_show);
+	gl.uniform1i(prog_pic_show.samp, 3);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	
+	gl.activeTexture(gl.TEXTURE3);
+	gl.bindTexture(gl.TEXTURE_2D, pictexture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, pictexture, 0);
+	gl.uniform1i(prog_pic_show.samp, 4);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+    }
+
+    var frozenvelocity = false;
+    var frozenanim = false;
+
+    function handleMouseDown(evt) {
+	if (evt.button==0) {
+	if (frozenvelocity) {
+	frozenvelocity = false;
+	$("#velocitystatus").html("Dynamic");
+	} else {
+	frozenvelocity = true;
+	$("#velocitystatus").html("Frozen");
+	}
+	}
+
+	if (evt.button==2) {
+	if (frozenanim) {
+	frozenanim = false;
+	$("#animstatus").html("Running");
+	} else {
+	frozenanim = true;
+	$("#animstatus").html("Stopped");
+	}
+	}
+    }
+
+    function restart() {
+	frozenvelocity = false;
+	frozenanim = false;
+	$("#velocitystatus").html("Dynamic");
+	$("#animstatus").html("Running");
+	loadInitialValues();
+	loadGrid();
+    }
+
+    function resetvelocity() {
+	loadInitialValues();
+    }
+	
+    function resetimage() {
+	loadGrid();
+	drawPic();
+    }
+
+    var maincanvas;
+
+    function webGLStart() {
+        maincanvas = document.getElementById("example");
+        gl = WebGLUtils.setupWebGL(maincanvas);
+	maincanvas.width = maincanvas.clientWidth;
+	maincanvas.height = maincanvas.clientHeight;
+	invisibleCanvas = document.createElement("canvas");
+        initShaders();
+	//loadImage('test.jpg');
+	loadGrid();
+	tick();
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearDepth(100);
+	$("#example").mousedown(handleMouseDown);
+	
+
+        //tick();
+    }
+		
+</script>
+</head>
+
+<body onload="webGLStart()">
+<canvas id="example" oncontextmenu="return false;"></canvas>
+<div id="text">
+Animation: <div id="animstatus" style="font-weight: bold;">Running</div> (right click image to start/stop) <br> <br>
+Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div> (left click image to toggle&ndash;try it!)
+<br> <br>
+<button onclick="restart()">Restart</button>
+<br>
+<button onclick="resetvelocity()">Reset Velocity Field</button>
+<br>
+<button onclick="resetimage()">Reset Background Image</button>
+</div>
+</body>
+<script src="webgl-utils.js"></script>
+<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
