@@ -291,11 +291,12 @@ var gl;
 	picFBO = gl.createFramebuffer();
 	picFBO1 = gl.createFramebuffer();
 
-	loadInitialValues();
+	loadInitialValues('random');
     }
 
-    function loadInitialValues() {
-	for (x = 0; x < m; x++) {
+    function loadInitialValues(type) {
+	if (type=='random') {
+		for (x = 0; x < m; x++) {
 		for (y = 0; y < m; y++) {
 			/* if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
 			pix[3*(x*m+y)+1] = 
@@ -314,6 +315,55 @@ var gl;
 			r = r*r;
 			pix[3*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
 			pix[3*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI); 
+		}
+		}
+	} else if (type=='pulse+rand') {
+		for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+			if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
+			var angle = Math.random();
+			var r = Math.random();
+			r = r*r;
+			pix[3*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
+			pix[3*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI);
+			pix[3*(x*m+y)+1] += 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			pix[3*(x*m+y)] += 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
+			} else {
+			pix[3*(x*m+y)] = 0;
+			pix[3*(x*m+y)+1] = 0;
+			}
+		}
+		}
+	} else if (type=='pulse') {
+		for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+			if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
+			pix[3*(x*m+y)+1] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			pix[3*(x*m+y)] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
+			} else {
+			pix[3*(x*m+y)] = 0;
+			pix[3*(x*m+y)+1] = 0;
+			}
+		}
+		}
+	} else if (type=='rect') {
+		for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+		if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
+		pix[3*(x*m+y)+1]= 0.5;
+		pix[3*(x*m+y)] = 0;
+		} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
+		pix[3*(x*m+y)+1]= -0.3;
+		pix[3*(x*m+y)]= 0.3;
+		} else {
+		pix[3*(x*m+y)+1] = 0;
+		pix[3*(x*m+y)] = 0;
+		}
+		}
 		}
 	}
         gl.activeTexture(gl.TEXTURE1);
@@ -540,7 +590,23 @@ var gl;
 		}	
 	}
 	}
-	gl.viewport(0,0,m,m);
+	loadTexture();
+    }
+
+    function loadCircles() {
+	var colorArrayR = [];
+	var colorArrayG = [];
+	var colorArrayB = [];
+	for (var i = 0; i < 64; i++) {
+		colorArrayR[i] = Math.floor(255*Math.random());
+		colorArrayG[i] = Math.floor(255*Math.random());
+		colorArrayB[i] = Math.floor(255*Math.random());
+	}
+	//fill in!
+    }
+
+    function loadTexture() {
+    	gl.viewport(0,0,m,m);
 	gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_2D, pictexture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -580,8 +646,7 @@ var gl;
     var frozenvelocity = false;
     var frozenanim = false;
 
-    function handleMouseDown(evt) {
-	if (evt.button==0) {
+    function handleVClick() {
 	if (frozenvelocity) {
 	frozenvelocity = false;
 	$("#velocitystatus").html("Dynamic");
@@ -589,16 +654,15 @@ var gl;
 	frozenvelocity = true;
 	$("#velocitystatus").html("Frozen");
 	}
-	}
+    }
 
-	if (evt.button==2) {
-	if (frozenanim) {
+    function handleAClick() {
+    	if (frozenanim) {
 	frozenanim = false;
 	$("#animstatus").html("Running");
 	} else {
 	frozenanim = true;
 	$("#animstatus").html("Stopped");
-	}
 	}
     }
 
@@ -607,12 +671,8 @@ var gl;
 	frozenanim = false;
 	$("#velocitystatus").html("Dynamic");
 	$("#animstatus").html("Running");
-	loadInitialValues();
+	loadInitialValues('random');
 	loadGrid();
-    }
-
-    function resetvelocity() {
-	loadInitialValues();
     }
 	
     function resetimage() {
@@ -634,8 +694,8 @@ var gl;
 	tick();
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clearDepth(100);
-	$("#example").mousedown(handleMouseDown);
-	
+	$("#animstatus").click(handleAClick);
+	$("#velocitystatus").click(handleVClick);
 
         //tick();
     }
@@ -646,12 +706,18 @@ var gl;
 <body onload="webGLStart()">
 <canvas id="example" oncontextmenu="return false;"></canvas>
 <div id="text">
-Animation: <div id="animstatus" style="font-weight: bold;">Running</div> (right click image to start/stop) <br> <br>
-Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div> (left click image to toggle&ndash;try it!)
+Animation: <div id="animstatus" style="font-weight: bold;">Running</div> (click to start/stop) <br> <br>
+Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div> (click to toggle&ndash;try it!)
 <br> <br>
 <button onclick="restart()">Restart</button>
 <br>
-<button onclick="resetvelocity()">Reset Velocity Field</button>
+<button onclick="loadInitialValues('random')">Reset Velocity Field (Random)</button>
+<br>
+<button onclick="loadInitialValues('pulse')">Reset Velocity Field (Pulse)</button>
+<br>
+<button onclick="loadInitialValues('pulse+rand')">Reset Velocity Field (Pulse+Random)</button>
+<br>
+<button onclick="loadInitialValues('rect')">Reset Velocity Field (Rects)</button>
 <br>
 <button onclick="resetimage()">Reset Background Image</button>
 </div>
