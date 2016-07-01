@@ -17,6 +17,10 @@ body, html {
   color: white;
   float: left;
 }
+#loadinfo {
+  color: white;
+  float: left;
+}
 </style>
 <script id="shader-vs" type="x-shader/x-vertex"> 
   precision mediump float;
@@ -163,6 +167,7 @@ precision mediump float;
 
 <script>
 var gl;
+var imageValue = 'stretch';
 
     function getShader(gl, id) {
         var shaderScript = document.getElementById(id);
@@ -203,7 +208,7 @@ var gl;
 
    var gl, canvas,
     prog, prog_show, prog_pic, texture0, texture1, texture2, FBO0, FBO1, FBO2, samp, samp1_pic, samp2_pic, samp_show,
-    pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, currentSamp = 1, currentPicSamp = 3;
+    pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, ctx, currentSamp = 1, currentPicSamp = 3;
  
    var pix = new Float32Array(3*m*m);
 
@@ -521,15 +526,52 @@ var gl;
 	currentPicSamp = 3;
 	}
     }
-	
 
-    function loadImage(url) {
-	var imageObj = new Image();
-	imageObj.onload = function() {
+    var imageObj = new Image();
+    imageObj.onerror = function() { $("loadinfo").html("Error loading image"); };
+    var imageLoaded = false;
+    imageObj.onload = function() {
+	$("#loadinfo").html("<br>");
+	$("#imageinfo").html("<br>");
+	imageLoaded = true;
+	if (imageValue=='stretch'){	
 	invisibleCanvas.width=m;
 	invisibleCanvas.height=m;
-	var ctx = invisibleCanvas.getContext('2d');
+	//first fill with black to get rid of old image
+	ctx.fillStyle = "black";
+	ctx.fillRect(0,0,m,m);
         ctx.drawImage(imageObj, 0, 0, m, m);
+	} else {
+	invisibleCanvas.width=m;
+	invisibleCanvas.height=m;
+	ctx.fillStyle = "black";
+	ctx.fillRect(0,0,m,m);
+	var h = imageObj.height;
+	var w = imageObj.width;
+	console.log(h,w);
+	var scalefactor = 0.5;
+	if (h <= w) {
+	if (w > m) scalefactor = m/w/2;
+	} else {
+	if (h > m) scalefactor = m/h/2;
+	}
+	var ulx = m/2-scalefactor*w;
+	var uly = m/2-scalefactor*h;
+	var destwidth = 2*scalefactor*w;
+	var destheight = 2*scalefactor*h;
+	ctx.drawImage(imageObj,ulx,uly,destwidth,destheight);
+	}
+	loadTextureFromCanvas();
+	};
+	
+    function loadImage(obj) {
+	var reader = new FileReader();
+	reader.onload = function(e) {imageObj.src = e.target.result}
+	reader.readAsDataURL(obj[0]);
+    }
+
+    function loadTextureFromCanvas() {
+	if (imageLoaded) {
 	gl.viewport(0,0,m,m);
 	gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_2D, pictexture);
@@ -563,9 +605,10 @@ var gl;
 	gl.uniform1i(prog_pic_show.samp, 4);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	tick();
-        };
-	imageObj.src = url;
+	drawPic();
+	} else {
+	$("#imageinfo").html("No image loaded!");
+	}
     }
 
     var texturepix = new Uint8Array(3*m*m);
@@ -593,7 +636,7 @@ var gl;
 	loadTexture();
     }
 
-    function loadCircles() {
+    /*function loadCircles() {
 	var colorArrayR = [];
 	var colorArrayG = [];
 	var colorArrayB = [];
@@ -603,7 +646,7 @@ var gl;
 		colorArrayB[i] = Math.floor(255*Math.random());
 	}
 	//fill in!
-    }
+    }*/
 
     function loadTexture() {
     	gl.viewport(0,0,m,m);
@@ -641,6 +684,7 @@ var gl;
 	gl.uniform1i(prog_pic_show.samp, 4);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	drawPic();
     }
 
     var frozenvelocity = false;
@@ -675,9 +719,13 @@ var gl;
 	loadGrid();
     }
 	
-    function resetimage() {
+    function resetimage(mode) {
+	if (mode=='grid') {
 	loadGrid();
 	drawPic();
+	} else {
+	loadTextureFromCanvas();
+	}
     }
 
     var maincanvas;
@@ -688,6 +736,7 @@ var gl;
 	maincanvas.width = maincanvas.clientWidth;
 	maincanvas.height = maincanvas.clientHeight;
 	invisibleCanvas = document.createElement("canvas");
+	ctx = invisibleCanvas.getContext('2d');
         initShaders();
 	//loadImage('test.jpg');
 	loadGrid();
@@ -696,6 +745,7 @@ var gl;
 	gl.clearDepth(100);
 	$("#animstatus").click(handleAClick);
 	$("#velocitystatus").click(handleVClick);
+	$('input[name="radio-choice-1"]').change(function(){imageValue = this.value});
 
         //tick();
     }
@@ -719,8 +769,25 @@ Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div
 <br>
 <button onclick="loadInitialValues('rect')">Reset Velocity Field (Rects)</button>
 <br>
-<button onclick="resetimage()">Reset Background Image</button>
+<button onclick="resetimage('grid')">Reset Background Image (grid)</button>
+<br>
+<button onclick="resetimage('file')">Reset Background Image (from file)</button>
+<div id="imageinfo"> <br> </div>
+<br>
+<br>
+<br>
+Load your own image:
+<br>
+<input type="file" accept="image/*" onchange="loadImage(this.files)" oninput="loadImage(this.files)"></input>
 </div>
+<div id="loadinfo"> <br> </div>
+<fieldset data-role="controlgroup" data-type="horizontal" id="imageoptions" name="imageoptions">
+   <legend>Image loading options:</legend>
+   <input type="radio" name="radio-choice-1" id="radio-choice-1" value="stretch" checked="checked" />
+   <label for="radio-choice-1">Stretch to fit</label>
+   <input type="radio" name="radio-choice-1" id="radio-choice-2" value="scale"/>
+   <label for="radio-choice-2">Scale to fit</label>
+</fieldset>
 </body>
 <script src="webgl-utils.js"></script>
 <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
