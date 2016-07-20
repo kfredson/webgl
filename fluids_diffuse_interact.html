@@ -21,6 +21,10 @@ body, html {
   color: white;
   float: left;
 }
+#footer {
+  color: white;
+  clear: left;
+}
 </style>
 <script id="shader-vs" type="x-shader/x-vertex"> 
   precision mediump float;
@@ -165,6 +169,35 @@ precision mediump float;
     }
 </script> 
 
+<script id="shader-fs-mouse" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+    uniform vec2 mouseCoord1;
+    uniform vec2 mouseCoord2;
+    uniform float magnitude;
+    uniform float dist_bound;
+
+    void main()
+    {
+        vec4 current = texture2D(samp, texCoord);
+	vec2 dir = normalize(mouseCoord1-mouseCoord2);
+	float m = max(0.1,magnitude);
+	float d = 50.*distance(mouseCoord1,mouseCoord2)/m;
+        //float d = 10.*distance(mouseCoord1,mouseCoord2);
+	float dist = abs(dot(vec2(-dir.y,dir.x),texCoord-mouseCoord1));
+	//float dist = distance(texCoord,mouseCoord1);
+	float bound1 = dot(dir,texCoord-mouseCoord1);
+	float bound2 = dot(dir,texCoord-mouseCoord2);
+	float d1 = distance(mouseCoord1,texCoord);
+	float d2 = min(d1,distance(mouseCoord2,texCoord));
+	//float result = (1.-step(0.,bound1*bound2))*(1.-step(dist_bound,dist));
+	float result = max((1.-step(0.,bound1*bound2))*(1.-step(dist_bound,dist)),1.-step(dist_bound,d2));
+	gl_FragColor = current+vec4(result*d*dir,0.,1.);
+	//gl_FragColor = current+0.00001*vec4(1.,1.,1.,1.);
+    }
+</script> 
+
 <script>
 var gl;
 var imageValue = 'stretch';
@@ -283,6 +316,18 @@ var imageValue = 'stretch';
 	gl.linkProgram(prog_pic_show);
 
 	prog_pic_show.samp = gl.getUniformLocation(prog_pic_show, "samp");
+
+	prog_mouse = gl.createProgram();
+	gl.bindAttribLocation(prog_mouse, 0, "aTexCoord");
+	gl.attachShader(prog_mouse, mainVertexShader);
+	gl.attachShader(prog_mouse, getShader(gl, "shader-fs-mouse"));
+	gl.linkProgram(prog_mouse);
+	
+	prog_mouse.sampler = gl.getUniformLocation(prog_mouse, "samp");
+	prog_mouse.mouseCoord1 = gl.getUniformLocation(prog_mouse, "mouseCoord1");
+	prog_mouse.mouseCoord2 = gl.getUniformLocation(prog_mouse, "mouseCoord2");
+	prog_mouse.magnitude = gl.getUniformLocation(prog_mouse, "magnitude");
+	prog_mouse.dist_bound = gl.getUniformLocation(prog_mouse, "dist_bound");
 	
 	texture2 = gl.createTexture();   	
 	texture1 = gl.createTexture();
@@ -370,6 +415,14 @@ var imageValue = 'stretch';
 		}
 		}
 		}
+	} else if (type=='zero') {
+		for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+		pix[3*(x*m+y)+1] = 0;
+		pix[3*(x*m+y)] = 0;
+		pix[3*(x*m+y)+2] = 0;
+		}
+		}
 	}
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
@@ -434,6 +487,7 @@ var imageValue = 'stretch';
 	gl.disable(gl.BLEND);
         gl.disable(gl.DEPTH_TEST);
         gl.viewport(0, 0, m, m);
+	var drawing = true;
 	if (!frozenanim) {	
 	if (!frozenvelocity) {	
 	draw(prog_fluids,1);
@@ -533,7 +587,6 @@ var imageValue = 'stretch';
     imageObj.onload = function() {
 	$("#loadinfo").html("<br>");
 	$("#imageinfo").html("<br>");
-	imageLoaded = true;
 	if (imageValue=='stretch'){	
 	invisibleCanvas.width=m;
 	invisibleCanvas.height=m;
@@ -561,6 +614,7 @@ var imageValue = 'stretch';
 	var destheight = 2*scalefactor*h;
 	ctx.drawImage(imageObj,ulx,uly,destwidth,destheight);
 	}
+	imageLoaded = true;
 	loadTextureFromCanvas();
 	};
 	
@@ -728,6 +782,36 @@ var imageValue = 'stretch';
 	}
     }
 
+    var mousedown = false;
+    var lastevt;
+    var lastdate;
+
+    function handlemousemove(evt) {
+	if (mousedown && !(evt.clientX==lastevt.clientX && evt.clientY==lastevt.clientY)) {
+	curdate = Date.now();
+	rect = maincanvas.getBoundingClientRect();
+	gl.useProgram(prog_mouse);
+	gl.uniform2f(prog_mouse.mouseCoord1,(evt.clientX-rect.left)/rect.width,1-(evt.clientY-rect.top)/rect.height);
+	gl.uniform2f(prog_mouse.mouseCoord2,(lastevt.clientX-rect.left)/rect.width,
+	1-(lastevt.clientY-rect.top)/rect.height);
+	gl.uniform1f(prog_mouse.magnitude,curdate-lastdate);
+	gl.uniform1f(prog_mouse.dist_bound,0.02);
+	draw(prog_mouse,1);
+	lastevt = evt;
+	lastdate = curdate;
+	}
+    }
+
+    function pageMouseUp() {
+	mousedown = false;
+    }
+
+    function handleMouseDown(evt) {
+	mousedown = true;
+	lastevt = evt;
+	lastdate = Date.now();
+    }
+
     var maincanvas;
 
     function webGLStart() {
@@ -746,6 +830,12 @@ var imageValue = 'stretch';
 	$("#animstatus").click(handleAClick);
 	$("#velocitystatus").click(handleVClick);
 	$('input[name="radio-choice-1"]').change(function(){imageValue = this.value});
+	
+	document.documentElement.onmouseup = pageMouseUp;
+	maincanvas.addEventListener("mouseleave",pageMouseUp,false);
+	maincanvas.addEventListener("mousemove",handlemousemove,false);
+	maincanvas.addEventListener("mousedown",handleMouseDown,false);
+	
 
         //tick();
     }
@@ -769,6 +859,8 @@ Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div
 <br>
 <button onclick="loadInitialValues('rect')">Reset Velocity Field (Rects)</button>
 <br>
+<button onclick="loadInitialValues('zero')">Reset Velocity Field To Zero</button>
+<br>
 <button onclick="resetimage('grid')">Reset Background Image (grid)</button>
 <br>
 <button onclick="resetimage('file')">Reset Background Image (from file)</button>
@@ -779,8 +871,6 @@ Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div
 Load your own image:
 <br>
 <input type="file" accept="image/*" onchange="loadImage(this.files)" oninput="loadImage(this.files)"></input>
-</div>
-<div id="loadinfo"> <br> </div>
 <fieldset data-role="controlgroup" data-type="horizontal" id="imageoptions" name="imageoptions">
    <legend>Image loading options:</legend>
    <input type="radio" name="radio-choice-1" id="radio-choice-1" value="stretch" checked="checked" />
@@ -788,6 +878,20 @@ Load your own image:
    <input type="radio" name="radio-choice-1" id="radio-choice-2" value="scale"/>
    <label for="radio-choice-2">Scale to fit</label>
 </fieldset>
+</div>
+<div id="loadinfo"> <br> </div>
+<div id="footer">
+<br>
+<b class="char">Click on the image and drag the mouse to create fluid effects</b>
+<br>
+<br>
+Links:
+<br>
+<a href="https://www.ibiblio.org/e-notes/webgl/gpu/fluid.htm" style="color:GreenYellow">Fluid simulation by Evgeny Demidov</a>
+<br>
+<a href="http://www.dgp.toronto.edu/people/stam/reality/Research/pub.html" style="color:GreenYellow">Jos Stam's papers (describe the "stable fluid" methods used by many of these simulations)</a>
+<br>
+</div>
 </body>
 <script src="webgl-utils.js"></script>
 <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
