@@ -636,11 +636,11 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	var xscale = (x-15)/40.0;
 	var hColor;
 	if (xscale <= 1) {
-		hColor = [1-xscale, xscale,0];
+		hColor = [1-xscale, 0.8*xscale+0.2,0];
 	} else if (xscale <= 2) {
-		hColor = [0,2-xscale,xscale-1];
+		hColor = [0, 0.8*(2-xscale)+0.2, xscale-1];
 	} else {
-		hColor = [xscale-2,0,3-xscale];
+		hColor = [1-(xscale-3)*(xscale-3), 0.2, 1-(xscale-2)*(xscale-2)];
 	}
 	gl.useProgram(prog_show);	
 	gl.uniform3f(basecolorLoc, hColor[0], hColor[1], hColor[2]);
