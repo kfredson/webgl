@@ -243,7 +243,7 @@ var imageValue = 'stretch';
     prog, prog_show, prog_pic, texture0, texture1, texture2, FBO0, FBO1, FBO2, samp, samp1_pic, samp2_pic, samp_show,
     pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, ctx, currentSamp = 1, currentPicSamp = 3;
  
-   var pix = new Float32Array(3*m*m);
+   var pix = new Float32Array(4*m*m);
 
    function initShaders() {
 	
@@ -363,8 +363,8 @@ var imageValue = 'stretch';
 			var angle = Math.random();
 			var r = Math.random();
 			r = r*r;
-			pix[3*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
-			pix[3*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI); 
+			pix[4*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
+			pix[4*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI); 
 		}
 		}
 	} else if (type=='pulse+rand') {
@@ -374,15 +374,15 @@ var imageValue = 'stretch';
 			var angle = Math.random();
 			var r = Math.random();
 			r = r*r;
-			pix[3*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
-			pix[3*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI);
-			pix[3*(x*m+y)+1] += 
+			pix[4*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
+			pix[4*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI);
+			pix[4*(x*m+y)+1] += 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
-			pix[3*(x*m+y)] += 
+			pix[4*(x*m+y)] += 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			} else {
-			pix[3*(x*m+y)] = 0;
-			pix[3*(x*m+y)+1] = 0;
+			pix[4*(x*m+y)] = 0;
+			pix[4*(x*m+y)+1] = 0;
 			}
 		}
 		}
@@ -390,13 +390,13 @@ var imageValue = 'stretch';
 		for (x = 0; x < m; x++) {
 		for (y = 0; y < m; y++) {
 			if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
-			pix[3*(x*m+y)+1] = 
+			pix[4*(x*m+y)+1] = 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
-			pix[3*(x*m+y)] = 
+			pix[4*(x*m+y)] = 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			} else {
-			pix[3*(x*m+y)] = 0;
-			pix[3*(x*m+y)+1] = 0;
+			pix[4*(x*m+y)] = 0;
+			pix[4*(x*m+y)+1] = 0;
 			}
 		}
 		}
@@ -404,45 +404,45 @@ var imageValue = 'stretch';
 		for (x = 0; x < m; x++) {
 		for (y = 0; y < m; y++) {
 		if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
-		pix[3*(x*m+y)+1]= 0.5;
-		pix[3*(x*m+y)] = 0;
+		pix[4*(x*m+y)+1]= 0.5;
+		pix[4*(x*m+y)] = 0;
 		} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
-		pix[3*(x*m+y)+1]= -0.3;
-		pix[3*(x*m+y)]= 0.3;
+		pix[4*(x*m+y)+1]= -0.3;
+		pix[4*(x*m+y)]= 0.3;
 		} else {
-		pix[3*(x*m+y)+1] = 0;
-		pix[3*(x*m+y)] = 0;
+		pix[4*(x*m+y)+1] = 0;
+		pix[4*(x*m+y)] = 0;
 		}
 		}
 		}
 	} else if (type=='zero') {
 		for (x = 0; x < m; x++) {
 		for (y = 0; y < m; y++) {
-		pix[3*(x*m+y)+1] = 0;
-		pix[3*(x*m+y)] = 0;
-		pix[3*(x*m+y)+2] = 0;
+		pix[4*(x*m+y)+1] = 0;
+		pix[4*(x*m+y)] = 0;
+		pix[4*(x*m+y)+2] = 0;
 		}
 		}
 	}
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.FLOAT, pix);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture0);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.FLOAT, pix);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 	gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, texture2);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.FLOAT, pix);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.bindFramebuffer(gl.FRAMEBUFFER, FBO0);
@@ -457,7 +457,7 @@ var imageValue = 'stretch';
         if( gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
         alert(err + "FLOAT as the color attachment to an FBO");
     }
-		
+
     function drawScene() {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);

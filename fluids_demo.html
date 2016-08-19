@@ -160,7 +160,7 @@ var gl;
     prog, prog_show, prog_pic, texture, texture1, FBO, FBO1, samp, samp1_pic, samp2_pic, samp_show,
     pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, currentSamp = 1, currentPicSamp = 2;
  
-   var pix = new Float32Array(3*m*m);
+   var pix = new Float32Array(4*m*m);
 
    function initShaders() {
 	
@@ -226,24 +226,24 @@ var gl;
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			}*/
 			if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
-			pix[3*(x*m+y)]= 1;
+			pix[4*(x*m+y)]= 1;
 			} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
-			pix[3*(x*m+y)+1]= 1;
+			pix[4*(x*m+y)+1]= 1;
 			}
 		}
 	}
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.FLOAT, pix);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.FLOAT, pix);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
