@@ -146,14 +146,14 @@ precision mediump float;
 
 <script id="shader-fs-pic" type="x-shader/x-fragment"> 
 precision mediump float;
-		
+const float spacing = 1./512.;	
 uniform sampler2D samp;
 uniform sampler2D picsamp;
 varying vec2 texCoord;
 
 void main(void) {
-   vec2 x = 0.01*texture2D(samp, texCoord).xy;
-   gl_FragColor = texture2D(picsamp, texCoord-x);
+   vec2 current = 0.01*texture2D(samp, texCoord).xy;
+   gl_FragColor = texture2D(picsamp, texCoord-current);
 }
 </script> 
  
@@ -426,21 +426,21 @@ var imageValue = 'stretch';
 	}
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
         gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture0);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
         gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 	gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, texture2);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
         gl.RGBA, gl.FLOAT, pix);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -635,7 +635,7 @@ var imageValue = 'stretch';
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, pictexture1);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);        
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);

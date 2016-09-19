@@ -1,0 +1,421 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>WebGL Fluids</title>
+<style>
+body, html {
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(85,85,85);
+}
+#example {
+  width: 512px;
+  height: 512px;
+}
+#loading {
+  color: white;
+  position:absolute;
+  top: 10px;
+  left: 10px;
+}
+#controls {
+  color: white;
+  position: absolute;
+  top: 10px;
+  left: 610px;
+  width: 300px;
+}
+#text {
+  color: white;
+  position: absolute;
+  top: 610px;
+  left: 10px;
+  width: 910px;
+}
+</style>
+<script id="shader-vs" type="x-shader/x-vertex"> 
+  precision mediump float;
+  uniform sampler2D samp;
+  attribute vec2 aTexCoord;
+  uniform float speed;
+  varying vec2 texCoord;
+void main()
+    {
+	gl_Position = vec4(aTexCoord, 0., 1.);
+	texCoord = vec2((aTexCoord.x+1.)/2., (aTexCoord.y+1.)/2.);
+    }
+</script> 
+
+<script id="shader-fs-fluid" type="x-shader/x-fragment"> 
+precision mediump float;		
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   vec4 left = texture2D(samp, texCoord+vec2(-spacing,0.));
+   vec4 right = texture2D(samp, texCoord+vec2(spacing,0.));
+   vec4 up = texture2D(samp, texCoord+vec2(0.,spacing));
+   vec4 down = texture2D(samp, texCoord+vec2(0.,-spacing));
+   vec4 current = texture2D(samp, texCoord);
+   //float uxX = (right.x-left.x)/2.;
+   //float uyY = (up.y-down.y)/2.;
+   //float uxY = (right.y-left.y)/2.;
+   //float uyX = (up.x-down.x)/2.;
+   vec4 next = texture2D(samp, texCoord-0.01*vec2(current.x,current.y));
+   vec4 lapl = left+right+up+down-4.*current;
+   gl_FragColor = vec4(
+		next.x+0.1*lapl.x,
+		next.y+0.1*lapl.y,
+		current.z,1.);
+}
+</script> 
+
+<script id="shader-fs-relax" type="x-shader/x-fragment"> 
+precision mediump                    float;		
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   vec4 left = texture2D(samp, texCoord+vec2(-spacing,0.));
+   vec4 right = texture2D(samp, texCoord+vec2(spacing,0.));
+   vec4 up = texture2D(samp, texCoord+vec2(0.,spacing));
+   vec4 down = texture2D(samp, texCoord+vec2(0.,-spacing));
+   vec4 current = texture2D(samp,texCoord); 
+   float uxX = (right.x-left.x)/2.;
+   float uyY = (up.y-down.y)/2.;
+   gl_FragColor = vec4(current.x,current.y,0.25*(left.z+right.z+up.z+down.z-uxX-uyY),1.);
+}
+</script> 
+
+<script id="shader-fs-project" type="x-shader/x-fragment">
+precision mediump                    float;		
+uniform sampler2D samp;
+uniform float speed;
+const float spacing = 1./512.;
+varying vec2 texCoord;
+void main(void) {
+   float left = texture2D(samp, texCoord+vec2(-spacing,0.)).z;
+   float right = texture2D(samp, texCoord+vec2(spacing,0.)).z;
+   float up = texture2D(samp, texCoord+vec2(0.,spacing)).z;
+   float down = texture2D(samp, texCoord+vec2(0.,-spacing)).z;
+   vec4 cur = texture2D(samp, texCoord);
+   gl_FragColor = vec4(cur.x-(right-left)/2.,cur.y-(up-down)/2.,cur.z,1.);
+}
+</script>
+ 
+<script id="shader-fs-show" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+
+    void main()
+    {
+	vec4 c = texture2D(samp, texCoord);
+	gl_FragColor = abs(c);
+    }
+</script> 
+
+<script id="shader-fs-mouse" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+    uniform vec2 mouseCoord1;
+    uniform vec2 mouseCoord2;
+    uniform float magnitude;
+    uniform float dist_bound;
+
+    void main()
+    {
+        vec4 current = texture2D(samp, texCoord);
+	vec2 dir = normalize(mouseCoord1-mouseCoord2);
+	float m = max(0.1,magnitude);
+	float d = 50.*distance(mouseCoord1,mouseCoord2)/m;
+        //float d = 10.*distance(mouseCoord1,mouseCoord2);
+	float dist = abs(dot(vec2(-dir.y,dir.x),texCoord-mouseCoord1));
+	//float dist = distance(texCoord,mouseCoord1);
+	float bound1 = dot(dir,texCoord-mouseCoord1);
+	float bound2 = dot(dir,texCoord-mouseCoord2);
+	float d1 = distance(mouseCoord1,texCoord);
+	float d2 = min(d1,distance(mouseCoord2,texCoord));
+	//float result = (1.-step(0.,bound1*bound2))*(1.-step(dist_bound,dist));
+	float result = max((1.-step(0.,bound1*bound2))*(1.-step(dist_bound,dist)),1.-step(dist_bound,d2));
+	gl_FragColor = current+vec4(result*d*dir,0.,1.);
+	//gl_FragColor = current+0.00001*vec4(1.,1.,1.,1.);
+    }
+</script> 
+
+<script>
+var gl;
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+    var err = "Your browser does not support ";
+
+   var gl, canvas,
+    prog, prog_show, prog_pic, texture, texture1, FBO, FBO1, samp, samp1_pic, samp2_pic, samp_show,
+    pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, currentSamp = 1, currentPicSamp = 2;
+ 
+   var pix = new Float32Array(4*m*m);
+
+   function initShaders() {
+	
+	var ext = gl.getExtension("OES_texture_float");
+   	if ( !ext ) {alert(err + "OES_texture_float extension"); return;}
+	
+        prog_show  = gl.createProgram();
+	gl.bindAttribLocation(prog_show, 0, "aTexCoord");
+	var mainVertexShader = getShader(gl, "shader-vs");
+        gl.attachShader(prog_show, mainVertexShader);
+        gl.attachShader(prog_show, getShader( gl, "shader-fs-show" ));
+        gl.linkProgram(prog_show);
+
+        gl.useProgram(prog_show);
+	samp_show = gl.getUniformLocation(prog_show, "samp");
+	gl.enableVertexAttribArray(0);
+	var trianglepts = [-1,-1,-1,1,1,1,1,-1];
+	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(trianglepts), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+        prog_fluids = gl.createProgram();
+	gl.bindAttribLocation(prog_fluids, 0, "aTexCoord");
+	gl.attachShader(prog_fluids, mainVertexShader);
+	gl.attachShader(prog_fluids, getShader(gl, "shader-fs-fluid"));
+	gl.linkProgram(prog_fluids);
+
+	prog_fluids.sampler = gl.getUniformLocation(prog_fluids, "samp");
+	gl.speedUniform = gl.getUniformLocation(prog_fluids, "speed");
+	gl.uniform1f(gl.speedUniform,0.5);
+
+	prog_relax = gl.createProgram();
+	gl.bindAttribLocation(prog_relax, 0, "aTexCoord");
+	gl.attachShader(prog_relax, mainVertexShader);
+	gl.attachShader(prog_relax, getShader(gl, "shader-fs-relax"));
+	gl.linkProgram(prog_relax);
+
+	prog_relax.sampler = gl.getUniformLocation(prog_relax, "samp");
+
+	prog_project = gl.createProgram();
+	gl.bindAttribLocation(prog_project, 0, "aTexCoord");
+	gl.attachShader(prog_project, mainVertexShader);
+	gl.attachShader(prog_project, getShader(gl, "shader-fs-project"));
+	gl.linkProgram(prog_project);
+
+	prog_project.sampler = gl.getUniformLocation(prog_project, "samp");
+
+	prog_mouse = gl.createProgram();
+	gl.bindAttribLocation(prog_mouse, 0, "aTexCoord");
+	gl.attachShader(prog_mouse, mainVertexShader);
+	gl.attachShader(prog_mouse, getShader(gl, "shader-fs-mouse"));
+	gl.linkProgram(prog_mouse);
+	
+	prog_mouse.sampler = gl.getUniformLocation(prog_mouse, "samp");
+	prog_mouse.mouseCoord1 = gl.getUniformLocation(prog_mouse, "mouseCoord1");
+	prog_mouse.mouseCoord2 = gl.getUniformLocation(prog_mouse, "mouseCoord2");
+	prog_mouse.magnitude = gl.getUniformLocation(prog_mouse, "magnitude");
+	prog_mouse.dist_bound = gl.getUniformLocation(prog_mouse, "dist_bound");
+   
+   	texture1 = gl.createTexture();
+   	texture = gl.createTexture();
+   	FBO = gl.createFramebuffer();
+   	FBO1 = gl.createFramebuffer();
+
+	loadInitialValues();
+    }
+
+    function loadInitialValues() {
+	for (x = 0; x < m; x++) {
+		for (y = 0; y < m; y++) {
+			/*if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
+			pix[3*(x*m+y)+1] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			pix[3*(x*m+y)] = 
+			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
+			}*/
+			if (Math.abs(x-m/2)<100 && Math.abs(y-m/4)<100) {
+			pix[4*(x*m+y)]= 1;
+			} else if (Math.abs(x-m/2)<100 && Math.abs(y-3*m/4)<100) {
+			pix[4*(x*m+y)+1]= 1;
+			}
+		}
+	}
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, pix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D, texture1, 0);
+        if( gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+        alert(err + "FLOAT as the color attachment to an FBO");
+    }
+		
+    function drawScene() {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.useProgram(prog_show);
+	gl.uniform1i(prog_show.sampler, currentSamp);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.enable(gl.DEPTH_TEST);
+	gl.enable(gl.BLEND);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+    }
+
+    function tick() {
+        requestAnimFrame(tick, maincanvas);
+	gl.disable(gl.BLEND);
+        gl.disable(gl.DEPTH_TEST);
+        gl.viewport(0, 0, m, m);
+        relax(10);
+	draw(prog_project);
+	draw(prog_fluids);
+	drawScene();
+    }
+
+    function relax(numiters) {
+	gl.useProgram(prog_relax);
+	for (var i = 0; i < numiters; i++) {	
+	if (currentSamp==1) {
+	gl.uniform1i(prog_relax.sampler, 0);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 0;
+	} else {
+	gl.uniform1i(prog_relax.sampler, 1);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 1;
+	}
+	}
+    }
+
+    function draw(glprogram) {
+	gl.useProgram(glprogram);
+	if (currentSamp==1) {
+	gl.uniform1i(glprogram.sampler,0);	
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 0;
+	} else {
+	gl.uniform1i(glprogram.sampler, 1);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	currentSamp = 1;
+	}
+    }
+
+    var maincanvas;
+
+    var mousedown = false;
+    var lastevt;
+    var lastdate;
+
+    function handlemousemove(evt) {
+	if (mousedown && !(evt.clientX==lastevt.clientX && evt.clientY==lastevt.clientY)) {
+	curdate = Date.now();
+	rect = maincanvas.getBoundingClientRect();
+	gl.useProgram(prog_mouse);
+	gl.uniform2f(prog_mouse.mouseCoord1,(evt.clientX-rect.left)/rect.width,1-(evt.clientY-rect.top)/rect.height);
+	gl.uniform2f(prog_mouse.mouseCoord2,(lastevt.clientX-rect.left)/rect.width,
+	1-(lastevt.clientY-rect.top)/rect.height);
+	gl.uniform1f(prog_mouse.magnitude,curdate-lastdate);
+	gl.uniform1f(prog_mouse.dist_bound,0.02);
+	draw(prog_mouse,1);
+	lastevt = evt;
+	lastdate = curdate;
+	}
+    }
+
+    function pageMouseUp() {
+	mousedown = false;
+    }
+
+    function handleMouseDown(evt) {
+	mousedown = true;
+	lastevt = evt;
+	lastdate = Date.now();
+    }
+
+    function webGLStart() {
+        maincanvas = document.getElementById("example");
+        gl = WebGLUtils.setupWebGL(maincanvas);
+	maincanvas.width = maincanvas.clientWidth;
+	maincanvas.height = maincanvas.clientHeight;
+	invisibleCanvas = document.createElement("canvas");
+        initShaders();
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearDepth(100);
+
+	document.documentElement.onmouseup = pageMouseUp;
+	maincanvas.addEventListener("mouseleave",pageMouseUp,false);
+	maincanvas.addEventListener("mousemove",handlemousemove,false);
+	maincanvas.addEventListener("mousedown",handleMouseDown,false);
+
+        tick();
+    }
+
+		
+</script>
+</head>
+
+<body onload="webGLStart()">
+<canvas id="example"></canvas>
+<br>
+<br>
+<b class="char">Click on the image and drag the mouse to create fluid effects</b>
+<br>
+</body>
+<script src="webgl-utils.js"></script>
