@@ -61,7 +61,7 @@ body, html {
         vpos[3] = v4*av4-vp;
         vpos[4] = v5*av5-vp;
         vpos[5] = v6*av6-vp;
-	float stepper = 1.-max(sign(abs(av6.x)),max(sign(abs(av6.y)),sign(abs(av6.z))));
+	float stepper = step(0.,-length(av6));
 	vec3 n1 = cross(vpos[0],vpos[1]);
 	n1 = n1+cross(vpos[1],vpos[2]); 
 	n1 = n1+cross(vpos[2],vpos[3]);
