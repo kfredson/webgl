@@ -111,7 +111,7 @@ precision mediump float;
 	n1 = n1+cross(vpos[1],vpos[2]); 
 	n1 = n1+cross(vpos[2],vpos[3]);
 	n1 = n1+cross(vpos[3],vpos[4]);
-	float stepper = 1.-max(sign(abs(adjVertexPosition6.x)),max(sign(abs(adjVertexPosition6.y)),sign(abs(adjVertexPosition6.z))));
+	float stepper = step(0.,-length(adjVertexPosition6));
 	n1 = n1+stepper*cross(vpos[4],vpos[0]);
 	n1 = n1+(1.-stepper)*cross(vpos[4],vpos[5]);
 	n1 = n1+(1.-stepper)*cross(vpos[5],vpos[0]);

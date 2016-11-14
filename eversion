@@ -1,0 +1,61 @@
+start point = [a,b,c]
+destination point = [d,e,f]
+
+find midpoint > project to plane perp to line thru origin and midpoint > rotate in fixed direction
+
+path is on cylinder with central axis equal to line between origin and midpoint.  will be either circle (if pts on same circular cross-section of cylinder) or helix (if pts on different circular cross-section)
+
+use cylindrical coordinates
+
+fwd function (cylindrical to cartesian) 
+
+const float PI = 3.14159265359;
+
+vec3 interpolate3(vec3 start, vec3 end, float t) {
+vec3 midpoint = (start+end)/2.;
+vec3 nmidpoint = normalize(midpoint);
+float d1 = dot(start,nmidpoint);
+float d2 = dot(end,nmidpoint);
+vec3 pstart = start-d1*nmidpoint;
+vec3 npstart = normalize(pstart);
+vec3 pend = end-d2*nmidpoint;
+vec3 b2 = normalize(cross(midpoint,pstart));
+float y = dot(b2,pend);
+float x = dot(npstart,pend);
+float angle = atan(y,x);
+angle += step(0.,-angle)*2.*PI;
+vec3 rot = cos(t*angle)*npstart+sin(t*angle)*b2;
+return rot+((1.-t)*d1+t*d2)*nmidpoint;
+} 
+
+vec3 interpolate1(vec3 start, vec3 end, float t) {
+return (1.-t)*start+t*end;
+}
+
+function sphericalMesh(phidivisions, thetadivisions) {
+var mesh = {};
+mesh.points = [];
+mesh.points.push(0,0,1);
+for (var i = 1; i < phidivisions; i++) {
+var phiangle = i*Math.PI/phidivisions;
+for (var j = 0; j < thetadivisions; j++) {
+var thetaangle = j*2*Math.PI/thetadivisions;
+mesh.points.push(Math.sin(phiangle)*Math.cos(thetaangle),Math.sin(phiangle)*Math.sin(thetaangle),Math.cos(phiangle));
+}
+}
+mesh.points.push(0,0,-1);
+mesh.triangles = [];
+for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(0,(i+1)%thetadivisions+1,i+1);
+for (var j = 1; j < phidivisions; j++) {
+for (var i = 0; i < thetadivisions; i++) {
+mesh.triangles.push(getindex(i,j,thetadivisions),getindex(i+1,j,thetadivisions),getindex(i+1,j+1,thetadivisions));
+mesh.triangles.push(getindex(i,j,thetadivisions),getindex(i+1,j+1,thetadivisions),getindex(i,j+1,thetadivisions));
+}
+}
+for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(i+1,(i+1)%thetadivisions+1,(phidivisions-1)*thetadivisions+1);
+return mesh;
+}
+
+function getindex(i,j,thetadivisions,phidivisions) {
+return (j-1)*thetadivisions+i+1;
+}
