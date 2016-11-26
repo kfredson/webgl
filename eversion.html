@@ -9,8 +9,8 @@ body, html {
   background-color: rgb(85,85,85);
 }
 #example {
-  width: 600px;
-  height: 600px;
+  width: 1000px;
+  height: 1000px;
   float: left;
 }
 #loading {
@@ -32,91 +32,133 @@ body, html {
   width: 910px;
 }
 </style>
-<script id="shader-vs" type="x-shader/x-vertex"> 
-  precision mediump float;
-  attribute vec2 aTexCoord;
-  attribute vec4 adjCoords12;
-  attribute vec4 adjCoords34;
-  attribute vec4 adjCoords56;
-  attribute float area;
-  attribute vec3 adjWeights123;
-  attribute vec3 adjWeights456;
-  uniform sampler2D samp;
-  uniform float damping;
-  uniform float speed;
-  uniform float stiffness;
-  varying vec4 vc;
-void main(void) {
-   gl_Position = vec4(-1.+2.*aTexCoord.x, -1.+2.*aTexCoord.y, 0., 1.);
-   vec4 v0 = texture2D(samp, aTexCoord.xy);
-   vec4 v1 = texture2D(samp, adjCoords12.xy);
-   vec4 v2 = texture2D(samp, adjCoords12.zw);
-   vec4 v3 = texture2D(samp, adjCoords34.xy);
-   vec4 v4 = texture2D(samp, adjCoords34.zw);
-   vec4 v5 = texture2D(samp, adjCoords56.xy);
-   vec4 v6 = texture2D(samp, adjCoords56.zw);
-   float dv = adjWeights123.x*(v1.x-v0.x)+adjWeights123.y*(v2.x-v0.x)+adjWeights123.z*(v3.x-v0.x)+adjWeights456.x*(v4.x-v0.x)+
-              adjWeights456.y*(v5.x-v0.x)+adjWeights456.z*(v6.x-v0.x);
-   float velocity = (1.-2.*speed*damping)*v0.z+stiffness*(0.04*dv/area)*speed;
-   vc = vec4(v0.x+0.0025*(velocity+v0.y)*speed,velocity,v0.y,1.);
-   gl_PointSize = 1.; 
-}
-</script> 
 
-<script id="shader-fs" type="x-shader/x-fragment"> 
-precision mediump                    float;																																	
-  varying vec4 vc;
-void main(void) {
-   gl_FragColor = vc;
-}
-</script> 
- 
-<script id="shader-vs-show" type="x-shader/x-vertex"> 
-precision mediump float;
+<script id="shader-vs-show-1" type="x-shader/x-vertex"> 
+    precision mediump float;
     uniform mat4 u_modelViewProjMatrix;
     uniform mat3 modelViewMatrix;
-    uniform sampler2D samp;
     uniform vec3 basecolor;
     uniform float shininess;
+    uniform float t;
 
-    attribute vec2 aTexCoord;
-    attribute vec4 adjCoords12;
-    attribute vec4 adjCoords34;
-    attribute vec4 adjCoords56;
-    attribute vec3 adjVertexPosition1;
-    attribute vec3 adjVertexPosition2;
-    attribute vec3 adjVertexPosition3;
-    attribute vec3 adjVertexPosition4;
-    attribute vec3 adjVertexPosition5;
-    attribute vec3 adjVertexPosition6;
-    attribute vec3 aVertexPosition;
+    attribute vec3 vp1;
+    attribute vec3 vp2;
+    attribute vec3 avp11;
+    attribute vec3 avp21;
+    attribute vec3 avp31;
+    attribute vec3 avp41;
+    attribute vec3 avp51;
+    attribute vec3 avp61;
+    attribute vec3 avp12;
+    attribute vec3 avp22;
+    attribute vec3 avp32;
+    attribute vec3 avp42;
+    attribute vec3 avp52;
+    attribute vec3 avp62;
+    
 
     varying vec3 vc;
     varying vec3 vn;
     varying vec3 vp;
 
+    const float PI = 3.14159265359;
+
+    vec3 interpolate(vec3 start, vec3 end, float t) {
+    vec3 midpoint = (start+end)/2.;
+    vec3 nmidpoint = normalize(midpoint);
+    float d1 = dot(start,nmidpoint);
+    float d2 = dot(end,nmidpoint);
+    vec3 pstart = start-d1*nmidpoint;
+    vec3 pend = end-d2*nmidpoint;
+    vec3 b2 = cross(nmidpoint,pstart);
+
+    vec3 rot = cos(t*PI)*pstart+sin(t*PI)*b2;
+    return rot+((1.-t)*d1+t*d2)*nmidpoint;
+    } 
+
+
     void main()
     {
-        float aVertexValue = texture2D(samp, vec2(aTexCoord.x, aTexCoord.y)).x;
-	vp = aVertexValue*aVertexPosition;
-        gl_Position = u_modelViewProjMatrix * vec4(vp, 1.0);
+        vec3 p1 = interpolate(vp1,vp2,t);
+        gl_Position = u_modelViewProjMatrix * vec4(p1, 1.0);
         vec3 vpos[6];
-        vpos[0] = adjVertexPosition1*(texture2D(samp, adjCoords12.xy).x)-vp;
-        vpos[1] = adjVertexPosition2*(texture2D(samp, adjCoords12.zw).x)-vp;
-	vpos[2] = adjVertexPosition3*(texture2D(samp, adjCoords34.xy).x)-vp;
-        vpos[3] = adjVertexPosition4*(texture2D(samp, adjCoords34.zw).x)-vp;
-        vpos[4] = adjVertexPosition5*(texture2D(samp, adjCoords56.xy).x)-vp;
-        vpos[5] = adjVertexPosition6*(texture2D(samp, adjCoords56.zw).x)-vp;
+        vpos[0] = interpolate(avp11,avp12,t)-p1;
+        vpos[1] = interpolate(avp21,avp22,t)-p1;
+	vpos[2] = interpolate(avp31,avp32,t)-p1;
+        vpos[3] = interpolate(avp41,avp42,t)-p1;
+        vpos[4] = interpolate(avp51,avp52,t)-p1;
+        vpos[5] = interpolate(avp61,avp62,t)-p1;
 	vec3 n1 = cross(vpos[0],vpos[1]);
 	n1 = n1+cross(vpos[1],vpos[2]); 
 	n1 = n1+cross(vpos[2],vpos[3]);
 	n1 = n1+cross(vpos[3],vpos[4]);
-	float stepper = 1.-max(sign(abs(adjVertexPosition6.x)),max(sign(abs(adjVertexPosition6.y)),sign(abs(adjVertexPosition6.z))));
+	float stepper = step(0.,-length(avp61));
 	n1 = n1+stepper*cross(vpos[4],vpos[0]);
 	n1 = n1+(1.-stepper)*cross(vpos[4],vpos[5]);
 	n1 = n1+(1.-stepper)*cross(vpos[5],vpos[0]);
 	vn = modelViewMatrix*n1;
-	vc = clamp((aVertexValue*0.8-1.0)*basecolor.yzx+0.3*basecolor.xyz+(2.0-aVertexValue*1.6)*basecolor.zxy,0.0,2.0);
+	vc = basecolor;
+	vp = p1;
+    }
+</script> 
+
+<script id="shader-vs-show-2" type="x-shader/x-vertex"> 
+    precision mediump float;
+    uniform mat4 u_modelViewProjMatrix;
+    uniform mat3 modelViewMatrix;
+    uniform vec3 basecolor;
+    uniform float shininess;
+    uniform float t;
+
+    attribute vec3 vp1;
+    attribute vec3 vp2;
+    attribute vec3 avp11;
+    attribute vec3 avp21;
+    attribute vec3 avp31;
+    attribute vec3 avp41;
+    attribute vec3 avp51;
+    attribute vec3 avp61;
+    attribute vec3 avp12;
+    attribute vec3 avp22;
+    attribute vec3 avp32;
+    attribute vec3 avp42;
+    attribute vec3 avp52;
+    attribute vec3 avp62;
+    
+
+    varying vec3 vc;
+    varying vec3 vn;
+    varying vec3 vp;
+
+    const float PI = 3.14159265359;
+
+    vec3 interpolate(vec3 start, vec3 end, float t) {
+    return (1.-t)*start+t*end;
+    }
+
+
+    void main()
+    {
+        vec3 p1 = interpolate(vp1,vp2,t);
+        gl_Position = u_modelViewProjMatrix * vec4(p1, 1.0);
+        vec3 vpos[6];
+        vpos[0] = interpolate(avp11,avp12,t)-p1;
+        vpos[1] = interpolate(avp21,avp22,t)-p1;
+	vpos[2] = interpolate(avp31,avp32,t)-p1;
+        vpos[3] = interpolate(avp41,avp42,t)-p1;
+        vpos[4] = interpolate(avp51,avp52,t)-p1;
+        vpos[5] = interpolate(avp61,avp62,t)-p1;
+	vec3 n1 = cross(vpos[0],vpos[1]);
+	n1 = n1+cross(vpos[1],vpos[2]); 
+	n1 = n1+cross(vpos[2],vpos[3]);
+	n1 = n1+cross(vpos[3],vpos[4]);
+	float stepper = step(0.,-length(avp61));
+	n1 = n1+stepper*cross(vpos[4],vpos[0]);
+	n1 = n1+(1.-stepper)*cross(vpos[4],vpos[5]);
+	n1 = n1+(1.-stepper)*cross(vpos[5],vpos[0]);
+	vn = modelViewMatrix*n1;
+	vc = basecolor;
+	vp = p1;
     }
 </script> 
  
@@ -139,12 +181,158 @@ precision mediump float;
 	val = val*val;
 	val = val*val*shininess*0.3;
         gl_FragColor = vec4(clamp(vnormal.z,0.0,1.0)*vc+0.1*basecolor+vec3(val,val,val),1.0);
-    }
+     }
 </script> 
 
 <script>
 var gl;
 var curRotQ = [1.0,0.0,0.0,0.0];
+var buffer0, buffer1, buffer2, buffer3, buffer4;
+var sin = Math.sin;
+var cos = Math.cos;
+var pi = Math.PI;
+
+function position(mesh, fn) { //fn outputs cartesian from spherical coordinate input
+var output = [];
+for (var i = 0; i < mesh.length; i += 2) output.push.apply(output,fn(mesh[i],mesh[i+1]));
+return output;
+}
+
+function c1ProfileFn(t,margin) {
+if (t < margin || 1-t < margin) return 0;
+if (t > 0.5) t = 1-t;
+if (t < 0.5*(0.5+margin)) return 0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
+t = t-2*(t-0.5*(0.5+margin));
+return 1-0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
+}
+
+var params = {"r1": 10, "r2": -64, "b": 3, "a": 0.2, "loops": 6, "R": 1, "thetadivisions": 200, "phidivisions": 100};
+
+var thetafnNormalized = function(s,p) {
+return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1+Math.abs(p.r2)),
+(p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1+Math.abs(p.r2))];
+};
+
+var thetafn = function(s,p) {
+return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1*(p.b+1)+p.r2),
+(p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1*(p.b+1)+p.r2)];
+};
+
+var fn0 = function (theta, phi) { //initial sphere
+return [params.R*Math.cos(theta)*Math.sin(phi),params.R*Math.sin(theta)*Math.sin(phi),params.R*Math.cos(phi)];
+};
+
+var fn1 = function (theta, phi) { //initial corrugations
+var xy = thetafnNormalized(theta,params);
+return [-2*xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.2)+params.R*Math.cos(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.2)),
+-2*xy[1]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.2)+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.2)),params.R*Math.cos(phi)];
+};
+//+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1))
+//*(1-c1ProfileFn(phi/Math.PI,0.2))
+
+var fn2 = function (theta, phi) { //north and south pole interchanged
+//stagger to get correct alignment for twisting phase
+theta = theta+Math.PI/params.loops;
+
+var xy = thetafnNormalized(theta,params);
+var r = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
+var residual = [xy[0]-xy[0]*0.3/r,xy[1]-xy[1]*0.3/r];
+var normalized = [xy[0]/r,xy[1]/r];
+var residualR = r-0.3;
+return [(-0.8*normalized[0]+2*residual[0]*Math.cos(2*phi))*c1ProfileFn(phi/Math.PI,0.1)+(params.R*Math.cos(theta)*Math.sin(phi))*(1-c1ProfileFn(phi/Math.PI,0.1)),
+(-0.8*normalized[1]+2*residual[1]*Math.cos(2*phi))*c1ProfileFn(phi/Math.PI,0.1)+(params.R*Math.sin(theta)*Math.sin(phi))*(1-c1ProfileFn(phi/Math.PI,0.1)),
+params.R*Math.cos(-Math.sin(2*phi)+Math.PI-phi)+2*Math.sin(2*phi)*residualR*c1ProfileFn(phi/Math.PI,0.1)];
+};
+//*(1-c1ProfileFn(phi/Math.PI,0.2))
+//+params.R*Math.cos(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.0))
+//+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.0))
+
+var fn3 = function (theta, phi) { //after twisting
+var r1 = 50*c1ProfileFn(phi/pi,0.2);
+var p = {"r1": r1, "r2": -64, "b": 3, "a": 0.2, "loops": 6, "R": 1};
+var xy = thetafnNormalized(theta,p);
+return [xy[0]*Math.sin(phi),
+xy[1]*Math.sin(phi),-2*params.R*Math.cos(phi)];
+};
+//+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1))
+
+var fn4 = function (theta, phi) { //everted
+var xy = thetafn(theta,params);
+return [-params.R*Math.cos(theta)*Math.sin(phi),-params.R*Math.sin(theta)*Math.sin(phi),-params.R*Math.cos(phi)];
+};
+
+
+function sphericalMesh(thetadivisions, phidivisions) {
+var mesh = {};
+//mesh.points = [];
+//mesh.points.push(0,0,1);
+mesh.points_spherical = [];
+mesh.points_spherical.push(0,0);
+for (var i = 1; i < phidivisions; i++) {
+var phiangle = i*Math.PI/phidivisions;
+for (var j = 0; j < thetadivisions; j++) {
+var thetaangle = j*2*Math.PI/thetadivisions;
+//mesh.points.push(Math.sin(phiangle)*Math.cos(thetaangle),Math.sin(phiangle)*Math.sin(thetaangle),Math.cos(phiangle));
+mesh.points_spherical.push(thetaangle,phiangle);
+}
+}
+//mesh.points.push(0,0,-1);
+mesh.points_spherical.push(Math.PI,0);
+mesh.triangles = [];
+for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(0,(i+1)%thetadivisions+1,i+1);
+for (var j = 1; j < phidivisions-1; j++) {
+for (var i = 0; i < thetadivisions; i++) {
+mesh.triangles.push(getindex(i,j,thetadivisions),getindex(i+1,j,thetadivisions),getindex(i+1,j+1,thetadivisions));
+mesh.triangles.push(getindex(i,j,thetadivisions),getindex(i+1,j+1,thetadivisions),getindex(i,j+1,thetadivisions));
+}
+}
+for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(i+1,(i+1)%thetadivisions+1,(phidivisions-1)*thetadivisions+1);
+mesh.av = [];
+mesh.av[0] = [];
+mesh.av[1] = [];
+mesh.av[2] = [];
+mesh.av[3] = [];
+mesh.av[4] = [];
+mesh.av[5] = [];
+
+var PAST_END = (phidivisions-1)*thetadivisions+2;
+
+//phidivisions-1)*thetadivisions+2 is one past the end of the "real" array of numbers
+//indicates that we won't really be using an adjacent point to calculate normal vectors.  This happens at/near poles. 
+for (var i = 0; i < 6; i++) mesh.av[i].push(PAST_END);
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push(0); //adjacent mesh points in counterclockwise order
+mesh.av[1].push((i-1+thetadivisions)%thetadivisions+1);
+mesh.av[2].push(getindex(i,2,thetadivisions));
+mesh.av[3].push(getindex(i+1,2,thetadivisions));
+mesh.av[4].push((i+1)%thetadivisions+1);
+mesh.av[5].push(PAST_END);
+}
+for (var j = 2; j < phidivisions-1; j++) {
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push(getindex(i+1,j,thetadivisions));
+mesh.av[1].push(getindex(i,j-1,thetadivisions));
+mesh.av[2].push(getindex(i-1,j-1,thetadivisions));
+mesh.av[3].push(getindex(i-1,j,thetadivisions));
+mesh.av[4].push(getindex(i,j+1,thetadivisions));
+mesh.av[5].push(getindex(i+1,j+1,thetadivisions));
+}
+}
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push((phidivisions-1)*thetadivisions+1);
+mesh.av[1].push(getindex(i+1,j,thetadivisions));
+mesh.av[2].push(getindex(i,j-1,thetadivisions));
+mesh.av[3].push(getindex(i-1,j-1,thetadivisions));
+mesh.av[4].push(getindex(i-1,j,thetadivisions));
+mesh.av[5].push(PAST_END);
+}
+for (var i = 0; i < 6; i++) mesh.av[i].push(PAST_END);
+return mesh;
+}
+
+	function getindex(i,j,thetadivisions,phidivisions) {
+	return (j-1)*thetadivisions+(i+thetadivisions)%thetadivisions+1;
+	}
 
     function getShader(gl, id) {
         var shaderScript = document.getElementById(id);
@@ -200,11 +388,8 @@ var curRotQ = [1.0,0.0,0.0,0.0];
     var err = "Your browser does not support ";
 
    var gl, canvas,
-    prog, prog_show, texture, texture1, FBO, FBO1, samp, samp_show,
-    mvpMatrixLoc, mvMatrixLoc, basecolorLoc,
-    m = 64, offset = 1.0/128.0, dampingLoc, speedLoc, shininessLoc, pointsBuffer, stiffnessLoc;
- 
-   var pix = new Float32Array(4*m*m);
+    prog,
+    mvpMatrixLoc, mvMatrixLoc, basecolorLoc, shininessLoc, tLoc, indexBuffer;
 
     function initShaders() {
 	projectionMatrix = new J3DIMatrix4();
@@ -214,283 +399,216 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	modelviewMatrix.load([1,0,0,0,0,1,0,0,0,0,1,0,0,0,-5,1]);
 	projectionMatrix.multiply(modelviewMatrix);
 	rotMatrix = new J3DIMatrix4();
-	numPts = pointsdict.length/3;
-        drawLength = trianglearray.length;
+
+	for (var i = 0; i < 14; i++) gl.enableVertexAttribArray(i);
+
         prog  = gl.createProgram();
-        gl.bindAttribLocation(prog, 0, "aTexCoord");
-        gl.bindAttribLocation(prog, 1, "adjCoords12");
-        gl.bindAttribLocation(prog, 2, "adjCoords34");
-        gl.bindAttribLocation(prog, 3, "adjCoords56");
-        gl.bindAttribLocation(prog, 4, "area");
-        gl.bindAttribLocation(prog, 5, "adjWeights123");
-        gl.bindAttribLocation(prog, 6, "adjWeights456");
-        gl.attachShader(prog, getShader( gl, "shader-vs" ));
-        gl.attachShader(prog, getShader( gl, "shader-fs" ));
+        gl.bindAttribLocation(prog, 0, "vp1");
+        gl.bindAttribLocation(prog, 1, "avp11");
+        gl.bindAttribLocation(prog, 2, "avp21");
+        gl.bindAttribLocation(prog, 3, "avp31");
+        gl.bindAttribLocation(prog, 4, "avp41");
+        gl.bindAttribLocation(prog, 5, "avp51");
+        gl.bindAttribLocation(prog, 6, "avp61");
+	gl.bindAttribLocation(prog, 7, "vp2");
+        gl.bindAttribLocation(prog, 8, "avp12");
+        gl.bindAttribLocation(prog, 9, "avp22");
+        gl.bindAttribLocation(prog, 10, "avp32");
+        gl.bindAttribLocation(prog, 11, "avp42");
+        gl.bindAttribLocation(prog, 12, "avp52");
+        gl.bindAttribLocation(prog, 13, "avp62");
+        gl.attachShader(prog, getShader( gl, "shader-vs-show-1" ));
+        gl.attachShader(prog, getShader( gl, "shader-fs-show" ));
         gl.linkProgram(prog);
+	//alert(gl.getProgramInfoLog(prog));
 
-   	gl.useProgram(prog);
-   	gl.enableVertexAttribArray(0);
-   	var coords = [];
-   	for (i = 0; i < numPts; i++) coords.push.apply(coords, getTexCoords(i));
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coords), gl.STATIC_DRAW);
-   	gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+	prog2  = gl.createProgram();
+        gl.bindAttribLocation(prog2, 0, "vp1");
+        gl.bindAttribLocation(prog2, 1, "avp11");
+        gl.bindAttribLocation(prog2, 2, "avp21");
+        gl.bindAttribLocation(prog2, 3, "avp31");
+        gl.bindAttribLocation(prog2, 4, "avp41");
+        gl.bindAttribLocation(prog2, 5, "avp51");
+        gl.bindAttribLocation(prog2, 6, "avp61");
+	gl.bindAttribLocation(prog2, 7, "vp2");
+        gl.bindAttribLocation(prog2, 8, "avp12");
+        gl.bindAttribLocation(prog2, 9, "avp22");
+        gl.bindAttribLocation(prog2, 10, "avp32");
+        gl.bindAttribLocation(prog2, 11, "avp42");
+        gl.bindAttribLocation(prog2, 12, "avp52");
+        gl.bindAttribLocation(prog2, 13, "avp62");
+        gl.attachShader(prog2, getShader( gl, "shader-vs-show-2" ));
+        gl.attachShader(prog2, getShader( gl, "shader-fs-show" ));        
+	gl.linkProgram(prog2);
+	//alert(gl.getProgramInfoLog(prog2));
 
-   	var adjc = [];
-   	for (i = 0; i < numPts; i++) {
-	var q = edgedict[i];
-        if (q.length == 5) { 
-          for (j = 0; j < 5; j++) adjc.push.apply(adjc, getTexCoords(q[j]));
-          adjc.push.apply(adjc, getTexCoords(i));
-	} else { for (j = 0; j < 6; j++) adjc.push.apply(adjc, getTexCoords(q[j])); }
-   	}
-   	var adjcoords = new Float32Array(adjc);
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, adjcoords, gl.STATIC_DRAW);
-   	gl.enableVertexAttribArray(1);
-   	gl.enableVertexAttribArray(2);
-   	gl.enableVertexAttribArray(3);
-   	gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 12*4, 0);
-   	gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 12*4, 4*4);
-   	gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 12*4, 8*4);
-   
-   	gl.enableVertexAttribArray(4);
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(areadict), gl.STATIC_DRAW);
-   	gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 0, 0);
-   
-   	gl.enableVertexAttribArray(5);
-   	gl.enableVertexAttribArray(6);
-   	var weights = [];
-   	for (i = 0; i < numPts; i++) {
-	var q = weightdict[i];
-        if (q.length == 5) weights.push.apply(weights, [q[0], q[1], q[2], q[3], q[4], 0.0]);
-        else weights.push.apply(weights, [q[0], q[1], q[2], q[3], q[4], q[5]]);
-   	}
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(weights), gl.STATIC_DRAW);
-   	gl.vertexAttribPointer(5, 3, gl.FLOAT, false, 6*4, 0);
-   	gl.vertexAttribPointer(6, 3, gl.FLOAT, false, 6*4, 3*4);
+	mesh = sphericalMesh(params.thetadivisions, params.phidivisions);
 
-   	dampingLoc = gl.getUniformLocation(prog, "damping");
-   	gl.uniform1f(dampingLoc, 0.0);
-   	speedLoc = gl.getUniformLocation(prog, "speed");
-   	gl.uniform1f(speedLoc, 0.8);
-	stiffnessLoc = gl.getUniformLocation(prog, "stiffness");
-	gl.uniform1f(stiffnessLoc, 1.0);
+	points0 = position(mesh.points_spherical, fn0);
+	points1 = position(mesh.points_spherical, fn1);
+	points2 = position(mesh.points_spherical, fn2);
+	points3 = position(mesh.points_spherical, fn3);
+	points4 = position(mesh.points_spherical, fn4);
+	points0.push(0,0,0);
+	points1.push(0,0,0);
+	points2.push(0,0,0);
+	points3.push(0,0,0);
+	points4.push(0,0,0);
 
-   	var ext = gl.getExtension("OES_texture_float");
-   	if ( !ext ) {alert(err + "OES_texture_float extension"); return;}
-   	if (gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) == 0){
-     	alert(err + "Vertex texture"); return;}
-   
-   	texture1 = gl.createTexture();
-   	texture = gl.createTexture();
-   	FBO = gl.createFramebuffer();
-   	FBO1 = gl.createFramebuffer();
+	buffer0data = [];
+	buffer1data = [];
+	buffer2data = [];
+	buffer3data = [];
+	buffer4data = [];
 
-   	samp = gl.getUniformLocation(prog, "samp");
+	for (var i = 0; i < mesh.points_spherical.length/2; i++) {
+		buffer0data.push(points0[3*i],points0[3*i+1],points0[3*i+2],
+				 points0[3*mesh.av[0][i]],points0[3*mesh.av[0][i]+1],points0[3*mesh.av[0][i]+2],
+				 points0[3*mesh.av[1][i]],points0[3*mesh.av[1][i]+1],points0[3*mesh.av[1][i]+2],
+				 points0[3*mesh.av[2][i]],points0[3*mesh.av[2][i]+1],points0[3*mesh.av[2][i]+2],
+				 points0[3*mesh.av[3][i]],points0[3*mesh.av[3][i]+1],points0[3*mesh.av[3][i]+2],
+				 points0[3*mesh.av[4][i]],points0[3*mesh.av[4][i]+1],points0[3*mesh.av[4][i]+2],
+				 points0[3*mesh.av[5][i]],points0[3*mesh.av[5][i]+1],points0[3*mesh.av[5][i]+2]);
+		buffer1data.push(points1[3*i],points1[3*i+1],points1[3*i+2],
+				 points1[3*mesh.av[0][i]],points1[3*mesh.av[0][i]+1],points1[3*mesh.av[0][i]+2],
+				 points1[3*mesh.av[1][i]],points1[3*mesh.av[1][i]+1],points1[3*mesh.av[1][i]+2],
+				 points1[3*mesh.av[2][i]],points1[3*mesh.av[2][i]+1],points1[3*mesh.av[2][i]+2],
+				 points1[3*mesh.av[3][i]],points1[3*mesh.av[3][i]+1],points1[3*mesh.av[3][i]+2],
+				 points1[3*mesh.av[4][i]],points1[3*mesh.av[4][i]+1],points1[3*mesh.av[4][i]+2],
+				 points1[3*mesh.av[5][i]],points1[3*mesh.av[5][i]+1],points1[3*mesh.av[5][i]+2]);
+		buffer2data.push(points2[3*i],points2[3*i+1],points2[3*i+2],
+				 points2[3*mesh.av[0][i]],points2[3*mesh.av[0][i]+1],points2[3*mesh.av[0][i]+2],
+				 points2[3*mesh.av[1][i]],points2[3*mesh.av[1][i]+1],points2[3*mesh.av[1][i]+2],
+				 points2[3*mesh.av[2][i]],points2[3*mesh.av[2][i]+1],points2[3*mesh.av[2][i]+2],
+				 points2[3*mesh.av[3][i]],points2[3*mesh.av[3][i]+1],points2[3*mesh.av[3][i]+2],
+				 points2[3*mesh.av[4][i]],points2[3*mesh.av[4][i]+1],points2[3*mesh.av[4][i]+2],
+				 points2[3*mesh.av[5][i]],points2[3*mesh.av[5][i]+1],points2[3*mesh.av[5][i]+2]);
+		buffer3data.push(points3[3*i],points3[3*i+1],points3[3*i+2],
+				 points3[3*mesh.av[0][i]],points3[3*mesh.av[0][i]+1],points3[3*mesh.av[0][i]+2],
+				 points3[3*mesh.av[1][i]],points3[3*mesh.av[1][i]+1],points3[3*mesh.av[1][i]+2],
+				 points3[3*mesh.av[2][i]],points3[3*mesh.av[2][i]+1],points3[3*mesh.av[2][i]+2],
+				 points3[3*mesh.av[3][i]],points3[3*mesh.av[3][i]+1],points3[3*mesh.av[3][i]+2],
+				 points3[3*mesh.av[4][i]],points3[3*mesh.av[4][i]+1],points3[3*mesh.av[4][i]+2],
+				 points3[3*mesh.av[5][i]],points3[3*mesh.av[5][i]+1],points3[3*mesh.av[5][i]+2]);
+		buffer4data.push(points4[3*i],points4[3*i+1],points4[3*i+2],
+				 points4[3*mesh.av[0][i]],points4[3*mesh.av[0][i]+1],points4[3*mesh.av[0][i]+2],
+				 points4[3*mesh.av[1][i]],points4[3*mesh.av[1][i]+1],points4[3*mesh.av[1][i]+2],
+				 points4[3*mesh.av[2][i]],points4[3*mesh.av[2][i]+1],points4[3*mesh.av[2][i]+2],
+				 points4[3*mesh.av[3][i]],points4[3*mesh.av[3][i]+1],points4[3*mesh.av[3][i]+2],
+				 points4[3*mesh.av[4][i]],points4[3*mesh.av[4][i]+1],points4[3*mesh.av[4][i]+2],
+				 points4[3*mesh.av[5][i]],points4[3*mesh.av[5][i]+1],points4[3*mesh.av[5][i]+2]);
+	}
 
-   	prog_show  = gl.createProgram();
-   	gl.bindAttribLocation(prog_show, 0, "aTexCoord");
-   	gl.bindAttribLocation(prog_show, 1, "adjCoords12");
-   	gl.bindAttribLocation(prog_show, 2, "adjCoords34");
-   	gl.bindAttribLocation(prog_show, 3, "adjCoords56");
-   	gl.bindAttribLocation(prog_show, 7, "adjVertexPosition1");
-   	gl.bindAttribLocation(prog_show, 8, "adjVertexPosition2");
-   	gl.bindAttribLocation(prog_show, 9, "adjVertexPosition3");
-   	gl.bindAttribLocation(prog_show, 10, "adjVertexPosition4");
-   	gl.bindAttribLocation(prog_show, 11, "adjVertexPosition5");
-   	gl.bindAttribLocation(prog_show, 12, "adjVertexPosition6");
-   	gl.bindAttribLocation(prog_show, 13, "aVertexPosition"); 
-   	gl.attachShader(prog_show, getShader( gl, "shader-vs-show" ));
-   	gl.attachShader(prog_show, getShader( gl, "shader-fs-show" ));
-  	gl.linkProgram(prog_show);
-   	gl.useProgram(prog_show);
+	/* for (var i = 0; i < mesh.points_spherical.length/2*3*7; i++) {
+		buffer0data.push(Math.random());
+		buffer1data.push(Math.random());
+		buffer2data.push(Math.random());
+		buffer3data.push(Math.random());
+		buffer4data.push(Math.random());
+	} */
 
-   	gl.enableVertexAttribArray(13);
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pointsdict), gl.STATIC_DRAW);
-   	gl.vertexAttribPointer(13, 3, gl.FLOAT, false, 0, 0);
-   
-   	var parr = [];
-   	for (i = 0; i<edgedict.length; i++) {
-	a = edgedict[i];	
-	parr.push.apply(parr,[pointsdict[3*a[0]],pointsdict[3*a[0]+1],
-	pointsdict[3*a[0]+2]]); 
-	parr.push.apply(parr,[pointsdict[3*a[1]],pointsdict[3*a[1]+1],
-	pointsdict[3*a[1]+2]]);
-	parr.push.apply(parr,[pointsdict[3*a[2]],pointsdict[3*a[2]+1],
-	pointsdict[3*a[2]+2]]);
-	parr.push.apply(parr,[pointsdict[3*a[3]],pointsdict[3*a[3]+1],
-	pointsdict[3*a[3]+2]]);
-	parr.push.apply(parr,[pointsdict[3*a[4]],pointsdict[3*a[4]+1],
-	pointsdict[3*a[4]+2]]);
-	if (a.length == 5) parr.push.apply(parr,[0,0,0]);
-	else parr.push.apply(parr,[pointsdict[3*a[5]],pointsdict[3*a[5]+1],
-	pointsdict[3*a[5]+2]]);
-   	}
-   	gl.enableVertexAttribArray(7);
-   	gl.enableVertexAttribArray(8);
-   	gl.enableVertexAttribArray(9);
-   	gl.enableVertexAttribArray(10);
-   	gl.enableVertexAttribArray(11);
-   	gl.enableVertexAttribArray(12);
-   	gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(parr), gl.STATIC_DRAW);
-   	gl.vertexAttribPointer(7, 3, gl.FLOAT, false, 3*6*4, 0);
-   	gl.vertexAttribPointer(8, 3, gl.FLOAT, false, 3*6*4, 3*4);
-   	gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 3*6*4, 6*4);
-   	gl.vertexAttribPointer(10, 3, gl.FLOAT, false, 3*6*4, 9*4);
-   	gl.vertexAttribPointer(11, 3, gl.FLOAT, false, 3*6*4, 12*4);
-   	gl.vertexAttribPointer(12, 3, gl.FLOAT, false, 3*6*4, 15*4);
+	
+
+	buffer0 = gl.createBuffer();
+	buffer1 = gl.createBuffer();
+	buffer2 = gl.createBuffer();
+	buffer3 = gl.createBuffer();
+	buffer4 = gl.createBuffer();
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer0);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer0data), gl.STATIC_DRAW);
+   	gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
+   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer1data), gl.STATIC_DRAW);
+   	gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
+   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer2data), gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
+   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer3data), gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer4);
+   	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer4data), gl.STATIC_DRAW);
+
+	
 
    	indexBuffer = gl.createBuffer();
    	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-   	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(trianglearray), gl.STATIC_DRAW);
-	samp_show = gl.getUniformLocation(prog_show, "samp");
-   	gl.uniform1i(samp_show, 0);
-   	mvpMatrixLoc = gl.getUniformLocation(prog_show, "u_modelViewProjMatrix");
-   	mvMatrixLoc = gl.getUniformLocation(prog_show, "modelViewMatrix");
-   	basecolorLoc = gl.getUniformLocation(prog_show, "basecolor");
-   	shininessLoc = gl.getUniformLocation(prog_show, "shininess");
-   	gl.uniform3f(basecolorLoc, 0.0, 1.0, 0.0);
-   	gl.uniform1f(shininessLoc, 0.0);
+   	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(mesh.triangles), gl.STATIC_DRAW);
+	drawLength = mesh.triangles.length;
+	tLoc = [gl.getUniformLocation(prog, "t"), gl.getUniformLocation(prog2, "t")];
+   	mvpMatrixLoc = [gl.getUniformLocation(prog, "u_modelViewProjMatrix"),gl.getUniformLocation(prog2, "u_modelViewProjMatrix")];
+   	mvMatrixLoc = [gl.getUniformLocation(prog, "modelViewMatrix"),gl.getUniformLocation(prog2, "modelViewMatrix")];
+   	basecolorLoc = [gl.getUniformLocation(prog, "basecolor"),gl.getUniformLocation(prog2, "basecolor")];
+   	shininessLoc = [gl.getUniformLocation(prog, "shininess"),gl.getUniformLocation(prog2, "shininess")];
+	gl.useProgram(prog);   	
+	gl.uniform3f(basecolorLoc[0], 0.0, 1.0, 0.0);
+	gl.uniform1f(shininessLoc[0], 0.0);
+	gl.useProgram(prog2);
+	gl.uniform3f(basecolorLoc[1], 0.0, 1.0, 0.0);
+   	gl.uniform1f(shininessLoc[1], 0.0);
    	gl.clearColor(0,0,0,1);
    	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-   	initialized = true;
-   	loadInitialValues("classic",1);
-    }
+	
+	rotMatrix = new J3DIMatrix4();
 
-   function getTexCoords(i) {
-	return [(i%m)/m+offset, Math.floor(i/m)/m+offset];    
-   }
-
-    function loadInitialValues(type, jitter) {
-	if (initialized) {	
-	var randvals = [];
-	curRotQ = [1.0, 0.0, 0.0, 0.0];
+	projectionMatrix = new J3DIMatrix4();
+        projectionMatrix.perspective(45, maincanvas.clientWidth / maincanvas.clientHeight, 0.1, 100.0);
+	projmat = projectionMatrix.getAsArray();
+	modelviewMatrix = new J3DIMatrix4();
 	modelviewMatrix.load([1,0,0,0,0,1,0,0,0,0,1,0,0,0,-5,1]);
-	projectionMatrix.load(projmat);
 	projectionMatrix.multiply(modelviewMatrix);
-	projectionMatrix.setUniform(gl, mvpMatrixLoc, false);
-	gl.uniformMatrix3fv(mvMatrixLoc, false, [1,0,0,0,1,0,0,0,1]);
-        if (type=="classic") {
-	for (i = 0; i<7; i++) randvals.push(Math.floor(Math.random()*numPts));
-	for (i = 0; i< numPts; i++) {
-		var val = 0;
-		for (j = 0; j < 7; j++) {
-			val += 1/(Math.pow(1.5*pointsdict[3*randvals[j]]-pointsdict[3*i],2)+
-				Math.pow(1.5*pointsdict[3*randvals[j]+1]-pointsdict[3*i+1],2)+
-				Math.pow(1.5*pointsdict[3*randvals[j]+2]-pointsdict[3*i+2],2));	
-		} 
-		pix[4*i] = 0.5+val/5+jitter*Math.random()/40;
-                pix[4*i+1] = 0;
-		} 
-        } else if (type=="pulse") {
-                var k = Math.floor(Math.random()*numPts);
-	        for (i = 0; i< numPts; i++) {
-		var val = 1/(Math.pow(1.2*pointsdict[3*k]-pointsdict[3*i],2)+
-				Math.pow(1.2*pointsdict[3*k+1]-pointsdict[3*i+1],2)+
-				Math.pow(1.2*pointsdict[3*k+2]-pointsdict[3*i+2],2));	
-		pix[4*i] = 1.0+val/20+jitter*Math.random()/40;
-                pix[4*i+1] = 0;
-		}
-        } else if (type=="doublepulse") {
-                for (i = 0; i<2; i++) randvals.push(Math.floor(Math.random()*numPts));
-	        for (i = 0; i< numPts; i++) {
-		var val = 0;
-		for (j = 0; j < 2; j++) {
-			val += 1/(Math.pow(1.2*pointsdict[3*randvals[j]]-pointsdict[3*i],2)+
-				Math.pow(1.2*pointsdict[3*randvals[j]+1]-pointsdict[3*i+1],2)+
-				Math.pow(1.2*pointsdict[3*randvals[j]+2]-pointsdict[3*i+2],2));	
-		} 
-		pix[4*i] = 1.0+val/20+jitter*Math.random()/40;
-                pix[4*i+1] = 0;
-		}
-        } else if (type=="ml24") {
-               for (i = 0; i< numPts; i++) {
-               pix[4*i] = 1.5*(7*pointsdict[3*i]*pointsdict[3*i]-1)*
-               (pointsdict[3*i+1]*pointsdict[3*i+1]-pointsdict[3*i+2]*pointsdict[3*i+2]);
-               pix[4*i+1] = 0;
-		}	
-	} else if (type=="ml04") {
-		for (i = 0; i< numPts; i++) {
-                var sq = pointsdict[3*i]*pointsdict[3*i];
-       		pix[4*i] = (35*sq*sq-30*sq+3)/4;
-                pix[4*i+1] = 0;
-		}
-        } else if (type=="ml12") {
-                for (i = 0; i< numPts; i++) {
-       		pix[4*i] = 3*pointsdict[3*i]*pointsdict[3*i+1];
-                pix[4*i+1] = 0;
-		}
-        } else if (type=="ml02") {
-		for (i = 0; i< numPts; i++) {
-		pix[4*i] = 2*pointsdict[3*i]*pointsdict[3*i]-pointsdict[3*i+1]*pointsdict[3*i+1]-pointsdict[3*i+2]*pointsdict[3*i+2];
-		pix[4*i+1] = 0;
-		}	
-	} else if (type=="ml14") {
-		for (i = 0; i < numPts; i++) {
-		pix[4*i] = 1.5*pointsdict[3*i]*pointsdict[3*i+1]*(7*pointsdict[3*i]*
-		pointsdict[3*i]-3);
-		pix[4*i+1] = 0;
-		}
-	} else if (type=="ml34") {
-		for (i = 0; i< numPts; i++) {
-		pix[4*i] = 4*(pointsdict[3*i+1]*pointsdict[3*i+1]-3*pointsdict[3*i+2]*pointsdict[3*i+2])*pointsdict[3*i+1]*pointsdict[3*i];
-		pix[4*i+1] = 0;
-		}
-	} else if (type=="ml44") {
-		for (i = 0; i< numPts; i++) {
-		var sqx = pointsdict[3*i+1]*pointsdict[3*i+1];
-		var sqy = pointsdict[3*i+2]*pointsdict[3*i+2];
-		pix[4*i] = 1.5*(sqx*sqx-6*sqx*sqy+sqy*sqy);
-		pix[4*i+1] = 0;
-		}
-	}
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, texture1);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
-        gl.RGBA, gl.FLOAT, pix);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
-        gl.RGBA, gl.FLOAT, pix);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D, texture, 0);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D, texture1, 0);
-        if( gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
-        alert(err + "FLOAT as the color attachment to an FBO");
-	}
+	gl.useProgram(prog);
+	projectionMatrix.setUniform(gl, mvpMatrixLoc[0], false);
+	gl.useProgram(prog2);
+	projectionMatrix.setUniform(gl, mvpMatrixLoc[1], false);
+	gl.useProgram(prog);	
+	gl.uniformMatrix3fv(mvMatrixLoc[0], false, [1,0,0,0,1,0,0,0,1]);
+	gl.useProgram(prog2);
+	gl.uniformMatrix3fv(mvMatrixLoc[1], false, [1,0,0,0,1,0,0,0,1]);
+   	initialized = true;
     }
+
 		
-    function drawScene() {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.useProgram(prog_show);
-	gl.uniform1i(samp_show,currentSampler);
-
-        gl.enable(gl.DEPTH_TEST);
+    function drawScene(t, stage) {
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    	if (stage==1) { //beginning sphere -> corrugations
+		gl.useProgram(prog2);
+		gl.uniform1f(tLoc[1],t);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer0);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);	
+	}
+	if (stage==2) { //corrugations -> switch poles
+		gl.useProgram(prog2);
+		gl.uniform1f(tLoc[1],t);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);			
+	}
+	if (stage==3) { //poles switched -> twist
+		gl.useProgram(prog);
+		gl.uniform1f(tLoc[0],t);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);		
+	}    
+	if (stage==4) { //uncorrugate
+		gl.useProgram(prog2);
+		gl.uniform1f(tLoc[1],t);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer4);
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);	
+	}
+	gl.enable(gl.DEPTH_TEST);
 	gl.enable(gl.BLEND);
-	gl.flush();
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer); 
-        gl.drawElements(gl.TRIANGLES, drawLength, gl.UNSIGNED_SHORT, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+	gl.drawElements(gl.TRIANGLES, drawLength/2, gl.UNSIGNED_SHORT, drawLength);
     }
 
-    var currentSampler = 0;
 
-    function tick() {
+    /* function tick() {
         requestAnimFrame(tick, maincanvas);
         gl.useProgram(prog);
         gl.disable(gl.BLEND);
@@ -510,12 +628,13 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	currentSampler = 0;
 	}
 	drawScene();
-    }
+    } */
 
     var maincanvas, colorcanvas, colorctx, baseRotQ, dragBaseX, dragBaseY, projmat;
     var mainDrag = false;
     var colorDrag = false;
     var initialized = false;
+    var t = 0;
 
     function webGLStart() {
         maincanvas = document.getElementById("example");
@@ -526,7 +645,7 @@ var curRotQ = [1.0,0.0,0.0,0.0];
         document.getElementById("damping").value = 0.0;
 	updateValue("dampingValue","0");
 	document.getElementById("speed").value = 1.0;
-	updateValue("speedValue","1");
+	updateValue("tValue","1");
 	document.getElementById("shininess").value = 0.0;
 	updateValue("shineValue","0");
 	document.getElementById("stiffness").value = 1.0;
@@ -544,39 +663,35 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	colormousemove(55,10);
 	document.getElementById("loading").innerHTML = "";
 
-        tick();
+        drawScene(t,3);
     }
 
     function handleMouseMove(evt) {
-	if (mainDrag) rotate(evt.clientX, evt.clientY);
+	if (mainDrag) {
+	rotate(evt.clientX, evt.clientY);
+	drawScene(t,3);
+	}
 	else if (colorDrag) {
 	var rect = colorcanvas.getBoundingClientRect();
 	colormousemove(evt.clientX-rect.left, evt.clientY-rect.top);
+	drawScene(t,3);
 	}
     }
 
     function updateValue(id,value) {
 	if (initialized) {
 	var val = Number(value);
-	if (id=='dampingValue') {
-                gl.useProgram(prog);
-		gl.uniform1f(dampingLoc,val/100);
-		document.getElementById("dampval").innerHTML = value;
-	}
-	if (id=='speedValue') {
-                gl.useProgram(prog);
-		gl.uniform1f(speedLoc, 0.8*val);
-		document.getElementById("speedval").innerHTML = value;
-	}
 	if (id=='shineValue') {
-		gl.useProgram(prog_show);
-		gl.uniform1f(shininessLoc,val);
-		document.getElementById("shineval").innerHTML = value;
-	}
-	if (id=='stiffValue') {
 		gl.useProgram(prog);
-		gl.uniform1f(stiffnessLoc,val);
-		document.getElementById("stiffval").innerHTML = value;
+		gl.uniform1f(shininessLoc[0],val);
+		gl.useProgram(prog2);
+		gl.uniform1f(shininessLoc[1],val);
+		document.getElementById("shineval").innerHTML = value;
+		drawScene(t,3);		
+	}
+	if (id=="speedValue") {
+		t = val;
+		drawScene(t,3);
 	}
 	}
     }
@@ -601,12 +716,18 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 		2*(qi*qk-qj*qr), 2*(qj*qk+qi*qr), 1-2*qi*qi-2*qj*qj, 0,
 		0, 0, 0, 1];
 	rotMatrix.load(mat);
-	gl.uniformMatrix3fv(mvMatrixLoc, false, [mat[0],mat[1],mat[2],mat[4],mat[5],mat[6],mat[8],mat[9],mat[10]]);
+	gl.useProgram(prog);
+	gl.uniformMatrix3fv(mvMatrixLoc[0], false, [mat[0],mat[1],mat[2],mat[4],mat[5],mat[6],mat[8],mat[9],mat[10]]);
+	gl.useProgram(prog2);
+	gl.uniformMatrix3fv(mvMatrixLoc[1], false, [mat[0],mat[1],mat[2],mat[4],mat[5],mat[6],mat[8],mat[9],mat[10]]);
 	modelviewMatrix.multiply(rotMatrix);
 	
 	projectionMatrix.load(projmat);
 	projectionMatrix.multiply(modelviewMatrix);
-	projectionMatrix.setUniform(gl, mvpMatrixLoc, false);	
+	gl.useProgram(prog);
+	projectionMatrix.setUniform(gl, mvpMatrixLoc[0], false);
+	gl.useProgram(prog2);
+	projectionMatrix.setUniform(gl, mvpMatrixLoc[1], false);	
     }
 
     function handleMouseDown(evt){
@@ -642,15 +763,12 @@ var curRotQ = [1.0,0.0,0.0,0.0];
 	} else {
 		hColor = [1-(xscale-3)*(xscale-3), 0.2, 1-(xscale-2)*(xscale-2)];
 	}
-	gl.useProgram(prog_show);	
-	gl.uniform3f(basecolorLoc, hColor[0], hColor[1], hColor[2]);
+	gl.useProgram(prog);	
+	gl.uniform3f(basecolorLoc[0], hColor[0], hColor[1], hColor[2]);
+	gl.useProgram(prog2);
+	gl.uniform3f(basecolorLoc[1], hColor[0], hColor[1], hColor[2]);
     }
 	
-
-function getStrip(t) {
-	
-}
-
 		
 </script>
 </head>
@@ -666,7 +784,7 @@ Damping: <div id="dampval" style="display: inline"></div>
 <div class="slider"><input class="range" id="damping" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('dampingValue', this.value)" type="range" onchange="updateValue('dampingValue', this.value)"> </div>
 <br>
 Speed: <div id="speedval" style="display: inline"></div>
-<div class="slider"><input class="range" id="speed" min="0.0" max="2.0" value="1.0" step="0.1" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
+<div class="slider"><input class="range" id="speed" min="0.0" max="2.0" value="1.0" step="0.01" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
 <br>
 Shininess: <div id="shineval" style="display: inline"></div>
 <div class="slider"><input class="range" id="shininess" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('shineValue', this.value)" type="range" onchange="updateValue('shineValue', this.value)"> </div>
@@ -763,40 +881,3 @@ There are some drawbacks with using the GPU for calculations.  For instance, it'
 <script src="mesh_large.js"></script>
 <script src="J3DIMath.js"></script>
 <script src="webgl-utils.js"></script>
-
-<script>
-//profileFn, angleFn, stripwidth, thetarange, phiFn, numVSegments, numHSegments
-//profileFn, angleFn, phiFn are assumed functions of t in [0,1]
-//profileFn = distance from z-axis as function of t
-//angleFn = rotation (on axis perp to z-axis and passing thru center of strip) as function of t
-//phiFn = phi in spherical coords
-function createStrip(args) {
-var segments = [];
-for (var i = 0; i <= numVSegments; i++) {
-var t = i/args.numSegments;
-var theta = args.thetarange[0]+(args.thetarange[1]-args.thetarange[0])/args.numSegments;
-var phi = args.phiFn(t);
-var rho = args.profileFn(t);
-var angle = args.angleFn(t);
-var center = getCartesianFromSpherical(rho,phi,theta);
-fCoords = [];
-for (var j = 0; j <= numHSegments; j++) {
-var coords1 = getCartesianFromSpherical(rho,phi,theta-stripwidth/2+j*stripwidth/numHSegments);
-fCoords.push(coords1);
-}
-fCoords.apply(function(p){return rotate(p,[[0,0,center[2]],[center[0],center[1],center[2]],angle)});
-segments.push(fCoords);
-}
-return segments;
-}
-
-function getCartesianFromSpherical(rho,phi,theta) {
-return [rho*Math.sin(phi)*Math.cos(theta),rho*Math.sin(phi)*Math.cos(theta),rho*Math.cos(phi)];
-}
-
-//rotate point on axis through two points in axiscoords through angle alpha
-function rotate(point,axiscoords,alpha) {
-
-}
-
-
