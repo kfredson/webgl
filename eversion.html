@@ -41,20 +41,20 @@ body, html {
     uniform float shininess;
     uniform float t;
 
-    attribute vec3 vp1;
-    attribute vec3 vp2;
-    attribute vec3 avp11;
-    attribute vec3 avp21;
-    attribute vec3 avp31;
-    attribute vec3 avp41;
-    attribute vec3 avp51;
-    attribute vec3 avp61;
-    attribute vec3 avp12;
-    attribute vec3 avp22;
-    attribute vec3 avp32;
-    attribute vec3 avp42;
-    attribute vec3 avp52;
-    attribute vec3 avp62;
+    attribute vec4 vp1;
+    attribute vec4 vp2;
+    attribute vec4 avp11;
+    attribute vec4 avp21;
+    attribute vec4 avp31;
+    attribute vec4 avp41;
+    attribute vec4 avp51;
+    attribute vec4 avp61;
+    attribute vec4 avp12;
+    attribute vec4 avp22;
+    attribute vec4 avp32;
+    attribute vec4 avp42;
+    attribute vec4 avp52;
+    attribute vec4 avp62;
     
 
     varying vec3 vc;
@@ -63,7 +63,10 @@ body, html {
 
     const float PI = 3.14159265359;
 
-    vec3 interpolate(vec3 start, vec3 end, float t) {
+    vec3 interpolate(vec4 start1, vec4 end1, float t) {
+    float offset = -2.*start1.w;
+    vec3 start = vec3(start1.x,start1.y,start1.z-offset);
+    vec3 end = vec3(end1.x,end1.y,end1.z-offset);
     vec3 midpoint = (start+end)/2.;
     vec3 nmidpoint = normalize(midpoint);
     float d1 = dot(start,nmidpoint);
@@ -73,7 +76,7 @@ body, html {
     vec3 b2 = cross(nmidpoint,pstart);
 
     vec3 rot = cos(t*PI)*pstart+sin(t*PI)*b2;
-    return rot+((1.-t)*d1+t*d2)*nmidpoint;
+    return rot+((1.-t)*d1+t*d2)*nmidpoint+vec3(0.,0.,offset);
     } 
 
 
@@ -110,20 +113,20 @@ body, html {
     uniform float shininess;
     uniform float t;
 
-    attribute vec3 vp1;
-    attribute vec3 vp2;
-    attribute vec3 avp11;
-    attribute vec3 avp21;
-    attribute vec3 avp31;
-    attribute vec3 avp41;
-    attribute vec3 avp51;
-    attribute vec3 avp61;
-    attribute vec3 avp12;
-    attribute vec3 avp22;
-    attribute vec3 avp32;
-    attribute vec3 avp42;
-    attribute vec3 avp52;
-    attribute vec3 avp62;
+    attribute vec4 vp1;
+    attribute vec4 vp2;
+    attribute vec4 avp11;
+    attribute vec4 avp21;
+    attribute vec4 avp31;
+    attribute vec4 avp41;
+    attribute vec4 avp51;
+    attribute vec4 avp61;
+    attribute vec4 avp12;
+    attribute vec4 avp22;
+    attribute vec4 avp32;
+    attribute vec4 avp42;
+    attribute vec4 avp52;
+    attribute vec4 avp62;
     
 
     varying vec3 vc;
@@ -132,8 +135,8 @@ body, html {
 
     const float PI = 3.14159265359;
 
-    vec3 interpolate(vec3 start, vec3 end, float t) {
-    return (1.-t)*start+t*end;
+    vec3 interpolate(vec4 start, vec4 end, float t) {
+    return (1.-t)*start.xyz+t*end.xyz;
     }
 
 
@@ -213,6 +216,11 @@ return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))
 (p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1+Math.abs(p.r2))];
 };
 
+var thetafnNormalizedStaggered = function(s,p,stagger) {
+return [(p.r1*(p.b+sin(p.loops*(s+stagger)))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1+Math.abs(p.r2)),
+(p.r1*(p.b+sin(p.loops*(s+stagger)))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1+Math.abs(p.r2))];
+};
+
 var thetafn = function(s,p) {
 return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1*(p.b+1)+p.r2),
 (p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1*(p.b+1)+p.r2)];
@@ -232,16 +240,18 @@ return [-2*xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.2)+params.R*Math.cos(th
 
 var fn2 = function (theta, phi) { //north and south pole interchanged
 //stagger to get correct alignment for twisting phase
-theta = theta+Math.PI/params.loops;
+var cutoff = 0.2;
 
-var xy = thetafnNormalized(theta,params);
-var r = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
-var residual = [xy[0]-xy[0]*0.3/r,xy[1]-xy[1]*0.3/r];
-var normalized = [xy[0]/r,xy[1]/r];
-var residualR = r-0.3;
-return [(-0.8*normalized[0]+2*residual[0]*Math.cos(2*phi))*c1ProfileFn(phi/Math.PI,0.1)+(params.R*Math.cos(theta)*Math.sin(phi))*(1-c1ProfileFn(phi/Math.PI,0.1)),
-(-0.8*normalized[1]+2*residual[1]*Math.cos(2*phi))*c1ProfileFn(phi/Math.PI,0.1)+(params.R*Math.sin(theta)*Math.sin(phi))*(1-c1ProfileFn(phi/Math.PI,0.1)),
-params.R*Math.cos(-Math.sin(2*phi)+Math.PI-phi)+2*Math.sin(2*phi)*residualR*c1ProfileFn(phi/Math.PI,0.1)];
+var xy = thetafnNormalizedStaggered(theta,params,Math.PI/params.loops);
+var radius = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
+var normalized = [xy[0]/radius, xy[1]/radius];
+var residual = [xy[0]-0.3*normalized[0],xy[1]-0.3*normalized[1]];
+var residualR = radius-0.3;
+var perp = [-sin(-sin(2*phi)+pi-phi)*(-2*cos(2*phi)-1),cos(phi)];
+var nperp = [perp[0]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1])),perp[1]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1]))];
+return [(-normalized[0]*Math.sin(phi)+3*residual[0]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
+(-normalized[1]*Math.sin(phi)+3*residual[1]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
+2*(params.R*Math.cos(-Math.sin(2*phi)+Math.PI-phi)+nperp[1]*3*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
 };
 //*(1-c1ProfileFn(phi/Math.PI,0.2))
 //+params.R*Math.cos(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.0))
@@ -462,41 +472,41 @@ return mesh;
 	buffer4data = [];
 
 	for (var i = 0; i < mesh.points_spherical.length/2; i++) {
-		buffer0data.push(points0[3*i],points0[3*i+1],points0[3*i+2],
-				 points0[3*mesh.av[0][i]],points0[3*mesh.av[0][i]+1],points0[3*mesh.av[0][i]+2],
-				 points0[3*mesh.av[1][i]],points0[3*mesh.av[1][i]+1],points0[3*mesh.av[1][i]+2],
-				 points0[3*mesh.av[2][i]],points0[3*mesh.av[2][i]+1],points0[3*mesh.av[2][i]+2],
-				 points0[3*mesh.av[3][i]],points0[3*mesh.av[3][i]+1],points0[3*mesh.av[3][i]+2],
-				 points0[3*mesh.av[4][i]],points0[3*mesh.av[4][i]+1],points0[3*mesh.av[4][i]+2],
-				 points0[3*mesh.av[5][i]],points0[3*mesh.av[5][i]+1],points0[3*mesh.av[5][i]+2]);
-		buffer1data.push(points1[3*i],points1[3*i+1],points1[3*i+2],
-				 points1[3*mesh.av[0][i]],points1[3*mesh.av[0][i]+1],points1[3*mesh.av[0][i]+2],
-				 points1[3*mesh.av[1][i]],points1[3*mesh.av[1][i]+1],points1[3*mesh.av[1][i]+2],
-				 points1[3*mesh.av[2][i]],points1[3*mesh.av[2][i]+1],points1[3*mesh.av[2][i]+2],
-				 points1[3*mesh.av[3][i]],points1[3*mesh.av[3][i]+1],points1[3*mesh.av[3][i]+2],
-				 points1[3*mesh.av[4][i]],points1[3*mesh.av[4][i]+1],points1[3*mesh.av[4][i]+2],
-				 points1[3*mesh.av[5][i]],points1[3*mesh.av[5][i]+1],points1[3*mesh.av[5][i]+2]);
-		buffer2data.push(points2[3*i],points2[3*i+1],points2[3*i+2],
-				 points2[3*mesh.av[0][i]],points2[3*mesh.av[0][i]+1],points2[3*mesh.av[0][i]+2],
-				 points2[3*mesh.av[1][i]],points2[3*mesh.av[1][i]+1],points2[3*mesh.av[1][i]+2],
-				 points2[3*mesh.av[2][i]],points2[3*mesh.av[2][i]+1],points2[3*mesh.av[2][i]+2],
-				 points2[3*mesh.av[3][i]],points2[3*mesh.av[3][i]+1],points2[3*mesh.av[3][i]+2],
-				 points2[3*mesh.av[4][i]],points2[3*mesh.av[4][i]+1],points2[3*mesh.av[4][i]+2],
-				 points2[3*mesh.av[5][i]],points2[3*mesh.av[5][i]+1],points2[3*mesh.av[5][i]+2]);
-		buffer3data.push(points3[3*i],points3[3*i+1],points3[3*i+2],
-				 points3[3*mesh.av[0][i]],points3[3*mesh.av[0][i]+1],points3[3*mesh.av[0][i]+2],
-				 points3[3*mesh.av[1][i]],points3[3*mesh.av[1][i]+1],points3[3*mesh.av[1][i]+2],
-				 points3[3*mesh.av[2][i]],points3[3*mesh.av[2][i]+1],points3[3*mesh.av[2][i]+2],
-				 points3[3*mesh.av[3][i]],points3[3*mesh.av[3][i]+1],points3[3*mesh.av[3][i]+2],
-				 points3[3*mesh.av[4][i]],points3[3*mesh.av[4][i]+1],points3[3*mesh.av[4][i]+2],
-				 points3[3*mesh.av[5][i]],points3[3*mesh.av[5][i]+1],points3[3*mesh.av[5][i]+2]);
-		buffer4data.push(points4[3*i],points4[3*i+1],points4[3*i+2],
-				 points4[3*mesh.av[0][i]],points4[3*mesh.av[0][i]+1],points4[3*mesh.av[0][i]+2],
-				 points4[3*mesh.av[1][i]],points4[3*mesh.av[1][i]+1],points4[3*mesh.av[1][i]+2],
-				 points4[3*mesh.av[2][i]],points4[3*mesh.av[2][i]+1],points4[3*mesh.av[2][i]+2],
-				 points4[3*mesh.av[3][i]],points4[3*mesh.av[3][i]+1],points4[3*mesh.av[3][i]+2],
-				 points4[3*mesh.av[4][i]],points4[3*mesh.av[4][i]+1],points4[3*mesh.av[4][i]+2],
-				 points4[3*mesh.av[5][i]],points4[3*mesh.av[5][i]+1],points4[3*mesh.av[5][i]+2]);
+		buffer0data.push(points0[3*i],points0[3*i+1],points0[3*i+2],0,
+				 points0[3*mesh.av[0][i]],points0[3*mesh.av[0][i]+1],points0[3*mesh.av[0][i]+2],0,
+				 points0[3*mesh.av[1][i]],points0[3*mesh.av[1][i]+1],points0[3*mesh.av[1][i]+2],0,
+				 points0[3*mesh.av[2][i]],points0[3*mesh.av[2][i]+1],points0[3*mesh.av[2][i]+2],0,
+				 points0[3*mesh.av[3][i]],points0[3*mesh.av[3][i]+1],points0[3*mesh.av[3][i]+2],0,
+				 points0[3*mesh.av[4][i]],points0[3*mesh.av[4][i]+1],points0[3*mesh.av[4][i]+2],0,
+				 points0[3*mesh.av[5][i]],points0[3*mesh.av[5][i]+1],points0[3*mesh.av[5][i]+2],0);
+		buffer1data.push(points1[3*i],points1[3*i+1],points1[3*i+2],0,
+				 points1[3*mesh.av[0][i]],points1[3*mesh.av[0][i]+1],points1[3*mesh.av[0][i]+2],0,
+				 points1[3*mesh.av[1][i]],points1[3*mesh.av[1][i]+1],points1[3*mesh.av[1][i]+2],0,
+				 points1[3*mesh.av[2][i]],points1[3*mesh.av[2][i]+1],points1[3*mesh.av[2][i]+2],0,
+				 points1[3*mesh.av[3][i]],points1[3*mesh.av[3][i]+1],points1[3*mesh.av[3][i]+2],0,
+				 points1[3*mesh.av[4][i]],points1[3*mesh.av[4][i]+1],points1[3*mesh.av[4][i]+2],0,
+				 points1[3*mesh.av[5][i]],points1[3*mesh.av[5][i]+1],points1[3*mesh.av[5][i]+2],0);
+		buffer2data.push(points2[3*i],points2[3*i+1],points2[3*i+2],params.R*Math.cos(mesh.points_spherical[2*i+1]),
+				 points2[3*mesh.av[0][i]],points2[3*mesh.av[0][i]+1],points2[3*mesh.av[0][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[0][i]+1]),
+				 points2[3*mesh.av[1][i]],points2[3*mesh.av[1][i]+1],points2[3*mesh.av[1][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[1][i]+1]),
+				 points2[3*mesh.av[2][i]],points2[3*mesh.av[2][i]+1],points2[3*mesh.av[2][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[2][i]+1]),
+				 points2[3*mesh.av[3][i]],points2[3*mesh.av[3][i]+1],points2[3*mesh.av[3][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[3][i]+1]),
+				 points2[3*mesh.av[4][i]],points2[3*mesh.av[4][i]+1],points2[3*mesh.av[4][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[4][i]+1]),
+				 points2[3*mesh.av[5][i]],points2[3*mesh.av[5][i]+1],points2[3*mesh.av[5][i]+2],params.R*Math.cos(mesh.points_spherical[2*mesh.av[5][i]+1]));
+		buffer3data.push(points3[3*i],points3[3*i+1],points3[3*i+2],0,
+				 points3[3*mesh.av[0][i]],points3[3*mesh.av[0][i]+1],points3[3*mesh.av[0][i]+2],0,
+				 points3[3*mesh.av[1][i]],points3[3*mesh.av[1][i]+1],points3[3*mesh.av[1][i]+2],0,
+				 points3[3*mesh.av[2][i]],points3[3*mesh.av[2][i]+1],points3[3*mesh.av[2][i]+2],0,
+				 points3[3*mesh.av[3][i]],points3[3*mesh.av[3][i]+1],points3[3*mesh.av[3][i]+2],0,
+				 points3[3*mesh.av[4][i]],points3[3*mesh.av[4][i]+1],points3[3*mesh.av[4][i]+2],0,
+				 points3[3*mesh.av[5][i]],points3[3*mesh.av[5][i]+1],points3[3*mesh.av[5][i]+2],0);
+		buffer4data.push(points4[3*i],points4[3*i+1],points4[3*i+2],0,
+				 points4[3*mesh.av[0][i]],points4[3*mesh.av[0][i]+1],points4[3*mesh.av[0][i]+2],0,
+				 points4[3*mesh.av[1][i]],points4[3*mesh.av[1][i]+1],points4[3*mesh.av[1][i]+2],0,
+				 points4[3*mesh.av[2][i]],points4[3*mesh.av[2][i]+1],points4[3*mesh.av[2][i]+2],0,
+				 points4[3*mesh.av[3][i]],points4[3*mesh.av[3][i]+1],points4[3*mesh.av[3][i]+2],0,
+				 points4[3*mesh.av[4][i]],points4[3*mesh.av[4][i]+1],points4[3*mesh.av[4][i]+2],0,
+				 points4[3*mesh.av[5][i]],points4[3*mesh.av[5][i]+1],points4[3*mesh.av[5][i]+2],0);
 	}
 
 	/* for (var i = 0; i < mesh.points_spherical.length/2*3*7; i++) {
@@ -572,39 +582,39 @@ return mesh;
 		gl.useProgram(prog2);
 		gl.uniform1f(tLoc[1],t);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer0);
-		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*i*4);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
-		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);	
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*(i-7)*4);	
 	}
 	if (stage==2) { //corrugations -> switch poles
 		gl.useProgram(prog2);
 		gl.uniform1f(tLoc[1],t);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer1);
-		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*i*4);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
-		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);			
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*(i-7)*4);			
 	}
 	if (stage==3) { //poles switched -> twist
 		gl.useProgram(prog);
 		gl.uniform1f(tLoc[0],t);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
-		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*i*4);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
-		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);		
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*(i-7)*4);
 	}    
 	if (stage==4) { //uncorrugate
 		gl.useProgram(prog2);
 		gl.uniform1f(tLoc[1],t);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
-		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*i*4);
+		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*i*4);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer4);
-		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 3*7*4, 3*(i-7)*4);	
+		for (var i = 7; i < 14; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*(i-7)*4);	
 	}
 	gl.enable(gl.DEPTH_TEST);
 	gl.enable(gl.BLEND);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
-	gl.drawElements(gl.TRIANGLES, drawLength/2, gl.UNSIGNED_SHORT, drawLength);
+	gl.drawElements(gl.TRIANGLES, drawLength/8, gl.UNSIGNED_SHORT, drawLength-drawLength/8);
     }
 
 
