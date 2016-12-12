@@ -212,7 +212,7 @@ t = t-2*(t-0.5*(0.5+margin));
 return 1-0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
 }
 
-var params = {"r1": 10, "r2": -64, "b": 2, "a": 0.35, "loops": 8, "R": 1, "thetadivisions": 500, "phidivisions": 100};
+var params = {"r1": 10, "r2": -64, "b": 2, "a": 0.35, "loops": 8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
 
 var thetafnNormalized = function(s,p) {
 return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1+Math.abs(p.r2)),
@@ -225,8 +225,8 @@ return [(p.r1*(p.b+sin(p.loops*(s+stagger)))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.
 };
 
 var thetafn = function(s,p) {
-return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1*(p.b+1)+p.r2),
-(p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1*(p.b+1)+p.r2)];
+return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R,
+(p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R];
 };
 
 var fn0 = function (theta, phi) { //initial sphere
@@ -261,8 +261,10 @@ return [2*Math.sin(phi)*Math.cos(theta),
 var fn2 = function (theta, phi) { //north and south pole interchanged
 //stagger to get correct alignment for twisting phase
 var cutoff = 0.05;
+var p = {"r2": -64, "b": 2, "a": 0.2, "loops": 8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
+p.r1 = 10*(1-(1-c1ProfileFn(phi/pi,cutoff))*(1-c1ProfileFn(phi/pi,cutoff)));
 
-var xy = thetafnNormalizedStaggered(theta,params,Math.PI/params.loops);
+var xy = thetafnNormalizedStaggered(theta,p,Math.PI/params.loops);
 //var xy = thetafnNormalized(theta,params);
 var radius = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
 var normalized = [xy[0]/radius, xy[1]/radius];
@@ -273,7 +275,7 @@ var nperp = [perp[0]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1])),perp[1]/(Math.
 //var nperp = normalized;
 return [(-normalized[0]*Math.sin(phi)+2*residual[0]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
 (-normalized[1]*Math.sin(phi)+2*residual[1]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
-1*(params.R*Math.cos(-0.75*Math.sin(2*phi)+Math.PI-phi)+nperp[1]*2*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
+1*(params.R*Math.cos(-1*Math.sin(2*phi)+Math.PI-phi)+nperp[1]*2*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
 }; 
 //*(1-c1ProfileFn(phi/Math.PI,0.2))
 //+params.R*Math.cos(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.0))
@@ -289,9 +291,11 @@ return [2*xy[0]*Math.sin(phi),
 //+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1))
 
 var fn3 = function (theta, phi) { //after twisting
-var r1 = 60*c1ProfileFn(phi/pi,0.01);
+var r1 = 60*(1-(1-c1ProfileFn(phi/pi,0.1))*(1-c1ProfileFn(phi/pi,0.1)));
 var p = {"r1": r1, "r2": -30, "b": 2, "a": 0.2, "loops": 8, "R": 1};
 var xy = thetafnNormalized(theta,p);
+//var radius = Math.sqrt(xy0[0]*xy0[0]+xy0[1]*xy0[1]); 
+//xy = [xy[0]/radius,xy[1]/radius];
 return [xy[0]*Math.sin(phi),
 xy[1]*Math.sin(phi),-1.5*params.R*Math.cos(phi)];
 };
@@ -658,7 +662,7 @@ return mesh;
 	gl.enable(gl.BLEND);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
-	gl.drawElements(gl.TRIANGLES, drawLength, gl.UNSIGNED_SHORT, 0);
+	gl.drawElements(gl.TRIANGLES, drawLength/4, gl.UNSIGNED_SHORT, drawLength);
     }
 
 
@@ -838,7 +842,7 @@ Damping: <div id="dampval" style="display: inline"></div>
 <div class="slider"><input class="range" id="damping" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('dampingValue', this.value)" type="range" onchange="updateValue('dampingValue', this.value)"> </div>
 <br>
 Speed: <div id="speedval" style="display: inline"></div>
-<div class="slider"><input class="range" id="speed" min="0.0" max="2.0" value="1.0" step="0.01" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
+<div class="slider"><input class="range" id="speed" min="0.0" max="1.0" value="0.0" step="0.005" oninput="updateValue('speedValue', this.value)" type="range" onchange="updateValue('speedValue', this.value)"> </div>
 <br>
 Shininess: <div id="shineval" style="display: inline"></div>
 <div class="slider"><input class="range" id="shininess" min="0.0" max="1.0" value="0.0" step="0.1" oninput="updateValue('shineValue', this.value)" type="range" onchange="updateValue('shineValue', this.value)"> </div>
