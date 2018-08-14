@@ -32,18 +32,23 @@ vec3 interpolate1(vec3 start, vec3 end, float t) {
 return (1.-t)*start+t*end;
 }
 
+//phidivisions MUST be greater than two
 function sphericalMesh(phidivisions, thetadivisions) {
 var mesh = {};
-mesh.points = [];
-mesh.points.push(0,0,1);
+//mesh.points = [];
+//mesh.points.push(0,0,1);
+mesh.points_spherical = [];
+mesh.points_spherical.push(0,0);
 for (var i = 1; i < phidivisions; i++) {
 var phiangle = i*Math.PI/phidivisions;
 for (var j = 0; j < thetadivisions; j++) {
 var thetaangle = j*2*Math.PI/thetadivisions;
-mesh.points.push(Math.sin(phiangle)*Math.cos(thetaangle),Math.sin(phiangle)*Math.sin(thetaangle),Math.cos(phiangle));
+//mesh.points.push(Math.sin(phiangle)*Math.cos(thetaangle),Math.sin(phiangle)*Math.sin(thetaangle),Math.cos(phiangle));
+mesh.points_spherical.push(phiangle,thetaangle);
 }
 }
-mesh.points.push(0,0,-1);
+//mesh.points.push(0,0,-1);
+mesh.points_spherical.push(Math.PI,0);
 mesh.triangles = [];
 for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(0,(i+1)%thetadivisions+1,i+1);
 for (var j = 1; j < phidivisions; j++) {
@@ -53,9 +58,97 @@ mesh.triangles.push(getindex(i,j,thetadivisions),getindex(i+1,j+1,thetadivisions
 }
 }
 for (var i = 0; i < thetadivisions; i++) mesh.triangles.push(i+1,(i+1)%thetadivisions+1,(phidivisions-1)*thetadivisions+1);
+mesh.av = [];
+mesh.av[0] = [];
+mesh.av[1] = [];
+mesh.av[2] = [];
+mesh.av[3] = [];
+mesh.av[4] = [];
+mesh.av[5] = [];
+for (var i = 0; i < 6; i++) mesh.av[i].push(-1); //-1 indicates that we won't really be using an adjacent point to calculate normal vectors.  This happens at/near poles. 
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push(0); //adjacent mesh points in counterclockwise order
+mesh.av[1].push((i-1)%thetadivisions+1);
+mesh.av[2].push(getindex(i,2,thetadivisions));
+mesh.av[3].push(getindex((i+1)%thetadivisions,2,thetadivisions));
+mesh.av[4].push((i+1)%thetadivisions+1);
+mesh.av[5].push(-1);
+}
+for (var j = 1; j < phidivisions; j++) {
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push(getindex((i+1)%thetadivisions,j,thetadivisions));
+mesh.av[1].push(getindex(i,j-1,thetadivisions));
+mesh.av[2].push(getindex((i-1)%thetadivisions,j-1,thetadivisions));
+mesh.av[3].push(getindex((i-1)%thetadivisions,j,thetadivisions));
+mesh.av[4].push(getindex(i,j+1,thetadivisions));
+mesh.av[5].push(getindex(i,j-2,thetadivisions));
+}
+}
+for (var i = 0; i < thetadivisions; i++) {
+mesh.av[0].push((phidivisions-1)*thetadivisions+1);
+mesh.av[1].push(getindex((i+1)%thetadivisions,j,thetadivisions));
+mesh.av[2].push(getindex(i,j-1,thetadivisions));
+mesh.av[3].push(getindex((i-1)%thetadivisions,j-1,thetadivisions));
+mesh.av[4].push(getindex((i-1)%thetadivisions,j,thetadivisions));
+mesh.av[5].push(-1);
+}
+for (var i = 0; i < 6; i++) mesh.av[i].push(-1);
 return mesh;
 }
 
-function getindex(i,j,thetadivisions,phidivisions) {
+function getindex(i,j,thetadivisions) {
 return (j-1)*thetadivisions+i+1;
 }
+
+
+this.ctx.moveTo(this.r1*(3+sin(this.loops*s))*cos(0.2*cos(2*this.loops*s-pi/2)+s)+this.r2*cos(s)+250,
+	this.r1*(3+sin(this.loops*s))*sin(0.2*cos(2*this.loops*s-pi/2)+s)+this.r2*sin(s)+250);
+
+function position(mesh, fn) { //fn outputs cartesian from spherical coordinate input
+var output = [];
+for (var i = 0; i < mesh.length; i += 2) output.push.apply(output,fn(mesh[i],mesh[i+1]);
+return output;
+}
+
+var c1ProfileFn(t,margin) {
+if (t < margin || 1-t < margin) return 0;
+if (t > 0.5) t = 1-t;
+if (t < 0.5*(0.5+margin)) return 0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
+t = 0.5*(0.5+margin)-2*(t-0.5*(0.5+margin));
+return 1-0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
+}
+
+//var R = 1; var loops = 6; 
+var params = {"r1": 10, "r2": -64, "b": 3, "a": 0.2, "loops": 6, "R": 1};
+
+var thetafn = function(theta,params) {
+return [(params.r1*(params.b+sin(params.loops*s))*cos(params.a*cos(2*params.loops*s-pi/2)+s)+params.r2*cos(s))*params.R/(params.r1*(params.b+1)+params.r2),
+(params.r1*(params.b+sin(params.loops*s))*sin(params.a*cos(2*params.loops*s-pi/2)+s)+params.r2*sin(s))*params.R/(params.r1*(params.b+1)+params.r2)];
+};
+
+var fn1 = function (theta, phi) { //initial corrugations
+var xy = thetafn(theta,params);
+return [xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),
+xy[1]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),R*Math.cos(phi)];
+};
+
+var fn2 = function (theta, phi) { //north and south pole interchanged
+var xy = thetafn(theta,params);
+return [xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),
+xy[1]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),params.R*Math.cos(0.2*Math.sin(2*phi)+Math.PI-phi)];
+};
+
+var fn3 = function (theta, phi) { //after twisting
+var r1 = 100*c1ProfileFn(phi/Math.PI,0.1);
+var p = {"r1": r1, "r2": -64, "b": 3, "a": 0.2, "loops": 6, "R": 1};
+var xy = thetafn(theta,p);
+return [xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),
+xy[1]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.1)+R*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1)),params.R*Math.cos(0.2*Math.sin(2*phi)+Math.PI-phi)];
+};
+
+var fn4 = function (theta, phi) { //everted
+var xy = thetafn(theta,params);
+return [-params.R*Math.cos(theta)*Math.sin(phi),-params.R*Math.cos(theta)*Math.sin(phi),-params.R*Math.cos(phi)];
+};
+
+

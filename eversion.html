@@ -9,8 +9,8 @@ body, html {
   background-color: rgb(85,85,85);
 }
 #example {
-  width: 1000px;
-  height: 1000px;
+  width: 800px;
+  height: 800px;
   float: left;
 }
 #loading {
@@ -39,6 +39,8 @@ body, html {
     uniform mat3 modelViewMatrix;
     uniform vec3 basecolor;
     uniform float shininess;
+    uniform float cost;
+    uniform float sint;
     uniform float t;
 
     attribute vec4 vp1;
@@ -61,10 +63,8 @@ body, html {
     varying vec3 vn;
     varying vec3 vp;
 
-    const float PI = 3.14159265359;
-
     vec3 interpolate(vec4 start1, vec4 end1, float t) {
-    vec3 offset = -2.*vec3(0.,0.,start1.w);
+    vec3 offset = -3.*vec3(0.,0.,start1.w);
     //vec3 offset = vec3(0.,0.,0.);
     vec3 start = vec3(start1.x,start1.y,start1.z)-offset;
     vec3 end = vec3(end1.x,end1.y,end1.z)-offset;
@@ -77,7 +77,7 @@ body, html {
     vec3 pend = end-d2*nmidpoint;
     vec3 b2 = cross(nmidpoint,pstart);
 
-    vec3 rot = cos(t*PI)*pstart+sin(t*PI)*b2;
+    vec3 rot = cost*pstart+sint*b2;
     return rot+((1.-t)*d1+t*d2)*nmidpoint+offset;
     } 
 
@@ -212,11 +212,11 @@ t = t-2*(t-0.5*(0.5+margin));
 return 1-0.5*(t-margin)*(t-margin)/(0.25-0.5*margin)/(0.25-0.5*margin);
 }
 
-var params = {"r1": 10, "r2": -64, "b": 2, "a": 0.35, "loops": 8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
+var params = {"r1": 10, "r2": -64, "b": 2, "a": 0.5, "loops": 8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
 
 var thetafnNormalized = function(s,p) {
-return [(p.r1*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1+Math.abs(p.r2)),
-(p.r1*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1+Math.abs(p.r2))];
+return [(p.r1*((p.b+sin(p.loops*s))*p.c+1)*(p.b+sin(p.loops*s))*cos(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*cos(s))*p.R/(p.r1+Math.abs(p.r2))/(p.b+1)/(p.b)/(0.5+p.c),
+(p.r1*((p.b+sin(p.loops*s))*p.c+1)*(p.b+sin(p.loops*s))*sin(p.a*cos(2*p.loops*s-pi/2)+s)+p.r2*sin(s))*p.R/(p.r1+Math.abs(p.r2))/(p.b+1)/(p.b)/(0.5+p.c)];
 };
 
 var thetafnNormalizedStaggered = function(s,p,stagger) {
@@ -241,41 +241,24 @@ return [-2*xy[0]*Math.sin(phi)*c1ProfileFn(phi/Math.PI,0.2)+params.R*Math.cos(th
 //+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1))
 //*(1-c1ProfileFn(phi/Math.PI,0.2))
 
-/*var fn2 = function (theta, phi) { //north and south pole interchanged
-//stagger to get correct alignment for twisting phase
-var cutoff = 0.05;
-
-var xy = thetafnNormalizedStaggered(theta,params,Math.PI/params.loops);
-//var xy = thetafnNormalized(theta,params);
-var radius = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
-var normalized = [xy[0]/radius, xy[1]/radius];
-var residual = [xy[0]-0.3*normalized[0],xy[1]-0.3*normalized[1]];
-var residualR = radius-0.3;
-var perp = [-sin(-sin(2*phi)+pi-phi)*(-2*cos(2*phi)-1),cos(phi)];
-var nperp = [perp[0]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1])),perp[1]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1]))];
-return [2*Math.sin(phi)*Math.cos(theta),
-2*Math.sin(phi)*Math.sin(theta),
-2*(params.R*Math.cos(-Math.sin(2*phi)+Math.PI-phi))]; //+Math.PI-phi)+nperp[1]*0*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
-};*/
-
 var fn2 = function (theta, phi) { //north and south pole interchanged
 //stagger to get correct alignment for twisting phase
 var cutoff = 0.05;
-var p = {"r2": -64, "b": 2, "a": 0.2, "loops": 8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
-p.r1 = 10*(1-(1-c1ProfileFn(phi/pi,cutoff))*(1-c1ProfileFn(phi/pi,cutoff)));
+var p = {"r2": -200, "b": 1.5, "a": 0.25, "loops":8, "R": 1, "thetadivisions": 200, "phidivisions": 100};
+p.r1 = 36*(1-(1-c1ProfileFn(phi/pi,cutoff))*(1-c1ProfileFn(phi/pi,cutoff))*(1-c1ProfileFn(phi/pi,cutoff)));
 
 var xy = thetafnNormalizedStaggered(theta,p,Math.PI/params.loops);
 //var xy = thetafnNormalized(theta,params);
 var radius = Math.sqrt(xy[0]*xy[0]+xy[1]*xy[1]); //should never be zero with correct params
 var normalized = [xy[0]/radius, xy[1]/radius];
-var residual = [xy[0]-0.3*normalized[0],xy[1]-0.3*normalized[1]];
-var residualR = radius-0.3;
-var perp = [-sin(-sin(2*phi)+pi-phi)*(-2*cos(2*phi)-1),cos(phi)];
+var residual = [xy[0]-0.2*normalized[0],xy[1]-0.2*normalized[1]];
+var residualR = radius-0.2;
+var perp = [-sin(-0.75*sin(2*phi)+pi-phi)*(-1.5*cos(2*phi)-1),cos(phi)];
 var nperp = [perp[0]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1])),perp[1]/(Math.sqrt(perp[0]*perp[0]+perp[1]*perp[1]))];
 //var nperp = normalized;
-return [(-normalized[0]*Math.sin(phi)+2*residual[0]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
-(-normalized[1]*Math.sin(phi)+2*residual[1]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
-1*(params.R*Math.cos(-1*Math.sin(2*phi)+Math.PI-phi)+nperp[1]*2*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
+return [(-normalized[0]*Math.sin(phi)+2.5*residual[0]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
+(-normalized[1]*Math.sin(phi)+2.5*residual[1]*nperp[0]*c1ProfileFn(phi/Math.PI,cutoff)),
+1*(2*params.R*Math.cos(-0.75*Math.sin(2*phi)+Math.PI-phi)+nperp[1]*2.5*residualR*c1ProfileFn(phi/Math.PI,cutoff))];
 }; 
 //*(1-c1ProfileFn(phi/Math.PI,0.2))
 //+params.R*Math.cos(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.0))
@@ -291,13 +274,16 @@ return [2*xy[0]*Math.sin(phi),
 //+params.R*Math.sin(theta)*Math.sin(phi)*(1-c1ProfileFn(phi/Math.PI,0.1))
 
 var fn3 = function (theta, phi) { //after twisting
-var r1 = 60*(1-(1-c1ProfileFn(phi/pi,0.1))*(1-c1ProfileFn(phi/pi,0.1)));
-var p = {"r1": r1, "r2": -30, "b": 2, "a": 0.2, "loops": 8, "R": 1};
+//var r1 = 200*(1-(1-c1ProfileFn(phi/pi,0.1))*(1-c1ProfileFn(phi/pi,0.1)));
+var r1 = 80*c1ProfileFn(phi/pi,0.2);
+//var p = {"r1": r1, "r2": -20, "b": 2*(c1ProfileFn(phi/pi,0)), "a": 0.25*c1ProfileFn(phi/pi,0.0), "loops": 8, "R": 1};
+var p = {"r1": r1, "r2": -20, "b": 2, "a": 0.15, "loops": 8, "R": 1, "c":0};
 var xy = thetafnNormalized(theta,p);
 //var radius = Math.sqrt(xy0[0]*xy0[0]+xy0[1]*xy0[1]); 
 //xy = [xy[0]/radius,xy[1]/radius];
-return [xy[0]*Math.sin(phi),
-xy[1]*Math.sin(phi),-1.5*params.R*Math.cos(phi)];
+var scaler = 2;
+return [scaler*xy[0]*Math.sin(phi),
+scaler*xy[1]*Math.sin(phi),-2*params.R*Math.cos(phi)];
 };
 
 var fn4 = function (theta, phi) { //everted
@@ -590,7 +576,9 @@ return mesh;
    	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
    	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(mesh.triangles), gl.STATIC_DRAW);
 	drawLength = mesh.triangles.length;
-	tLoc = [gl.getUniformLocation(prog, "t"), gl.getUniformLocation(prog2, "t")];
+	costLoc = gl.getUniformLocation(prog, "cost");
+	sintLoc = gl.getUniformLocation(prog, "sint");
+	tLoc = [gl.getUniformLocation(prog,"t"), gl.getUniformLocation(prog2, "t")];
    	mvpMatrixLoc = [gl.getUniformLocation(prog, "u_modelViewProjMatrix"),gl.getUniformLocation(prog2, "u_modelViewProjMatrix")];
    	mvMatrixLoc = [gl.getUniformLocation(prog, "modelViewMatrix"),gl.getUniformLocation(prog2, "modelViewMatrix")];
    	basecolorLoc = [gl.getUniformLocation(prog, "basecolor"),gl.getUniformLocation(prog2, "basecolor")];
@@ -598,9 +586,13 @@ return mesh;
 	gl.useProgram(prog);   	
 	gl.uniform3f(basecolorLoc[0], 0.0, 1.0, 0.0);
 	gl.uniform1f(shininessLoc[0], 0.0);
+	gl.uniform1f(costLoc, 1.0);
+	gl.uniform1f(sintLoc, 0.0);
+	gl.uniform1f(tLoc[0], 0.0);
 	gl.useProgram(prog2);
 	gl.uniform3f(basecolorLoc[1], 0.0, 1.0, 0.0);
    	gl.uniform1f(shininessLoc[1], 0.0);
+	gl.uniform1f(tLoc[1], 0.0);
    	gl.clearColor(0,0,0,1);
    	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	
@@ -644,7 +636,9 @@ return mesh;
 	}
 	if (stage==3) { //poles switched -> twist
 		gl.useProgram(prog);
-		gl.uniform1f(tLoc[0],t);
+		gl.uniform1f(costLoc,cos(Math.PI*t));
+		gl.uniform1f(sintLoc,sin(Math.PI*t));
+	        gl.uniform1f(tLoc[0],t);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer2);
 		for (var i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 4*7*4, 4*i*4);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer3);
@@ -662,7 +656,7 @@ return mesh;
 	gl.enable(gl.BLEND);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
-	gl.drawElements(gl.TRIANGLES, drawLength/4, gl.UNSIGNED_SHORT, drawLength);
+	gl.drawElements(gl.TRIANGLES, drawLength/2, gl.UNSIGNED_SHORT, 0);
     }
 
 

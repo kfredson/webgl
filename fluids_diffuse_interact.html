@@ -152,12 +152,54 @@ uniform sampler2D picsamp;
 varying vec2 texCoord;
 
 void main(void) {
-   vec2 current = 0.01*texture2D(samp, texCoord).xy;
-   gl_FragColor = texture2D(picsamp, texCoord-current);
+   vec2 current = texture2D(samp, texCoord).xy;
+   
+   //vec4 current = texture2D(samp, texCoord);
+   //The following scheme seems like it should work but doesn't!  Must be due to OpenGL's
+   //texture coordinate conventions.
+   //vec4 nextul = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,spacing/2.));
+   //vec4 nextur = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,spacing/2.));
+   //vec4 nextll = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(spacing/2.,-spacing/2.));
+   //vec4 nextlr = texture2D(samp, texCoord-0.01*vec2(current.x,current.y)+vec2(-spacing/2.,-spacing/2.));
+   float xfrac = fract(-512.*0.01*current.x);
+   float yfrac = fract(-512.*0.01*current.y);
+   float xint = floor(-512.*0.01*current.x)/512.;
+   float yint = floor(-512.*0.01*current.y)/512.;
+   vec2 v1 = texCoord+vec2(xint+spacing,yint+spacing);
+   vec2 v2 = texCoord+vec2(xint,yint+spacing);
+   vec2 v3 = texCoord+vec2(xint+spacing,yint);
+   vec2 v4 = texCoord+vec2(xint,yint);
+   vec4 nextul = texture2D(picsamp, v1)+vec4(floor(v1),0.,0.);
+   vec4 nextur = texture2D(picsamp, v2)+vec4(floor(v2),0.,0.);
+   vec4 nextll = texture2D(picsamp, v3)+vec4(floor(v3),0.,0.);
+   vec4 nextlr = texture2D(picsamp, v4)+vec4(floor(v4),0.,0.);
+   float center = min(2.*xfrac,min(2.*yfrac,min(2.-2.*xfrac,2.-2.*yfrac)))/4.;
+   float lr = max(1.-xfrac-yfrac,0.);
+   float ll = max(xfrac-yfrac,0.);
+   float ur = max(yfrac-xfrac,0.);
+   float ul = max(xfrac+yfrac-1.,0.);
+   vec4 av = (ul+center)*nextul+(ll+center)*nextll+(ur+center)*nextur+(lr+center)*nextlr;
+
+   gl_FragColor = vec4(av.x,av.y,0.,1.);
+   //gl_FragColor = vec4(fract(cCurrent.x),fract(cCurrent.y),0.,1.);
 }
 </script> 
  
 <script id="shader-fs-pic-show" type="x-shader/x-fragment"> 
+precision mediump float;
+    varying vec2 texCoord;
+    uniform sampler2D samp;
+    uniform sampler2D picsamp;
+
+    void main()
+    {
+    vec2 current = texture2D(samp, texCoord).xy;
+	gl_FragColor = texture2D(picsamp, current);
+	//gl_FragColor = vec4(1.d,0.,0.,1.);
+    }
+</script> 
+
+<script id="shader-fs-simple" type="x-shader/x-fragment"> 
 precision mediump float;
     varying vec2 texCoord;
     uniform sampler2D samp;
@@ -241,7 +283,7 @@ var imageValue = 'stretch';
 
    var gl, canvas,
     prog, prog_show, prog_pic, texture0, texture1, texture2, FBO0, FBO1, FBO2, samp, samp1_pic, samp2_pic, samp_show,
-    pictexture1, pictexture, picFBO, picFBO1, m = 512, invisibleCanvas, ctx, currentSamp = 1, currentPicSamp = 3;
+    pictexture1, pictexture, picFBO, picFBO1, aPicTexture, m = 512, invisibleCanvas, ctx, currentSamp = 1, currentPicSamp = 3;
  
    var pix = new Float32Array(4*m*m);
 
@@ -291,15 +333,6 @@ var imageValue = 'stretch';
 
 	prog_project.sampler = gl.getUniformLocation(prog_project, "samp");
 
-	prog_diffuse = gl.createProgram();
-	gl.bindAttribLocation(prog_diffuse, 0, "aTexCoord");
-	gl.attachShader(prog_diffuse, mainVertexShader);
-	gl.attachShader(prog_diffuse, getShader(gl, "shader-fs-diffuse"));
-	gl.linkProgram(prog_diffuse);
-
-	prog_diffuse.samp = gl.getUniformLocation(prog_diffuse, "samp");
-	prog_diffuse.diffsamp = gl.getUniformLocation(prog_diffuse, "diffsamp");
-
 	prog_pic = gl.createProgram();
 	gl.bindAttribLocation(prog_pic, 0, "aTexCoord");
 	gl.attachShader(prog_pic, mainVertexShader);
@@ -316,6 +349,15 @@ var imageValue = 'stretch';
 	gl.linkProgram(prog_pic_show);
 
 	prog_pic_show.samp = gl.getUniformLocation(prog_pic_show, "samp");
+	prog_pic_show.picsamp = gl.getUniformLocation(prog_pic_show, "picsamp");
+
+    prog_simple = gl.createProgram();
+    gl.bindAttribLocation(prog_simple, 0, "aTexCoord");
+	gl.attachShader(prog_simple, mainVertexShader);
+	gl.attachShader(prog_simple, getShader(gl, "shader-fs-simple"));
+	gl.linkProgram(prog_simple);
+	
+	prog_simple.samp = gl.getUniformLocation(prog_simple, "samp");
 
 	prog_mouse = gl.createProgram();
 	gl.bindAttribLocation(prog_mouse, 0, "aTexCoord");
@@ -340,6 +382,8 @@ var imageValue = 'stretch';
 	pictexture1 = gl.createTexture();
 	picFBO = gl.createFramebuffer();
 	picFBO1 = gl.createFramebuffer();
+
+    aPicTexture = gl.createTexture();
 
 	loadInitialValues('random');
     }
@@ -375,9 +419,9 @@ var imageValue = 'stretch';
 			var r = Math.random();
 			r = r*r;
 			pix[4*(x*m+y)] = 5*r*Math.cos(angle*2*Math.PI);
-			pix[4*(x*m+y)+1] = 5*r*Math.sin(angle*2*Math.PI);
+			pix[4*(x*m+y)+1] = -5*r*Math.sin(angle*2*Math.PI);
 			pix[4*(x*m+y)+1] += 
-			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			-Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
 			pix[4*(x*m+y)] += 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			} else {
@@ -391,7 +435,7 @@ var imageValue = 'stretch';
 		for (y = 0; y < m; y++) {
 			if ((x-m/2)*(x-m/2)+(y-m/2)*(y-m/2) < 60*60) {
 			pix[4*(x*m+y)+1] = 
-			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
+			-Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(m/2-x)/60/60;
 			pix[4*(x*m+y)] = 
 			Math.sqrt(60*60-(x-m/2)*(x-m/2)-(y-m/2)*(y-m/2))*(y-m/2)/60/60;
 			} else {
@@ -458,23 +502,12 @@ var imageValue = 'stretch';
         alert(err + "FLOAT as the color attachment to an FBO");
     }
 
-    function drawScene() {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);   
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.useProgram(prog_show);
-	gl.uniform1i(prog_show.sampler, currentSamp);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-        gl.enable(gl.DEPTH_TEST);
-	gl.enable(gl.BLEND);
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-    }
-
     function drawPic() {
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.useProgram(prog_pic_show);
-	gl.uniform1i(prog_pic_show.samp, currentPicSamp);
+	    gl.uniform1i(prog_pic_show.samp, currentPicSamp);
+        gl.uniform1i(prog_pic_show.picsamp, 5);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         gl.enable(gl.DEPTH_TEST);
@@ -526,42 +559,6 @@ var imageValue = 'stretch';
 	}
     }
 
-    function diffuse(numiters) {
-	gl.useProgram(prog_diffuse);
-	gl.uniform1i(prog_diffuse.samp, currentSamp);
-	var cSamp = currentSamp;
-	currentSamp = (currentSamp+1)%3;
-	prevSamp = (currentSamp+1)%3;
-	var temp = 0;
-	for (var i = 0; i < numiters; i++) {	
-	if (currentSamp==1) {
-	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
-	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	temp = prevSamp;
-	prevSamp = currentSamp;
-	currentSamp = temp;
-	} else if (currentSamp == 0) {
-	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
-	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	temp = prevSamp;
-	prevSamp = currentSamp;
-	currentSamp = temp;
-	} else if (currentSamp == 2) {
-	gl.uniform1i(prog_diffuse.diffsamp, prevSamp);
-	gl.bindFramebuffer(gl.FRAMEBUFFER, FBO2);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	temp = prevSamp;
-	prevSamp = currentSamp;
-	currentSamp = temp;
-	}
-	}
-    }
-
     function flowPic() {
 	gl.useProgram(prog_pic);
 	if (currentPicSamp==3) {
@@ -584,16 +581,25 @@ var imageValue = 'stretch';
     var imageObj = new Image();
     imageObj.onerror = function() { $("loadinfo").html("Error loading image"); };
     var imageLoaded = false;
-    imageObj.onload = function() {
+  
+    
+	function imageOnLoad() {
+    imageLoaded = true;
+    loadImageToCanvas();
+    loadTextureFromCanvas();
 	$("#loadinfo").html("<br>");
 	$("#imageinfo").html("<br>");
-	if (imageValue=='stretch'){	
+    }
+
+    function loadImageToCanvas() {
+    var radioVal = $('input[name=radio-choice-1]:checked').val()
+	if (radioVal=='stretch'){	
 	invisibleCanvas.width=m;
 	invisibleCanvas.height=m;
 	//first fill with black to get rid of old image
 	ctx.fillStyle = "black";
 	ctx.fillRect(0,0,m,m);
-        ctx.drawImage(imageObj, 0, 0, m, m);
+    ctx.drawImage(imageObj, 0, 0, m, m);
 	} else {
 	invisibleCanvas.width=m;
 	invisibleCanvas.height=m;
@@ -601,7 +607,7 @@ var imageValue = 'stretch';
 	ctx.fillRect(0,0,m,m);
 	var h = imageObj.height;
 	var w = imageObj.width;
-	console.log(h,w);
+	//console.log(h,w);
 	var scalefactor = 0.5;
 	if (h <= w) {
 	if (w > m) scalefactor = m/w/2;
@@ -614,9 +620,7 @@ var imageValue = 'stretch';
 	var destheight = 2*scalefactor*h;
 	ctx.drawImage(imageObj,ulx,uly,destwidth,destheight);
 	}
-	imageLoaded = true;
-	loadTextureFromCanvas();
-	};
+	}
 	
     function loadImage(obj) {
 	var reader = new FileReader();
@@ -624,46 +628,31 @@ var imageValue = 'stretch';
 	reader.readAsDataURL(obj[0]);
     }
 
+    imageObj.onload = imageOnLoad;
+
     function loadTextureFromCanvas() {
-	if (imageLoaded) {
+    loadIdentity();
 	gl.viewport(0,0,m,m);
-	gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, pictexture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));      
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.activeTexture(gl.TEXTURE4);
-        gl.bindTexture(gl.TEXTURE_2D, pictexture1);
-        //gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);        
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO1);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D, pictexture1, 0);
-	gl.useProgram(prog_pic_show);
-	gl.uniform1i(prog_pic_show.samp, 3);
-	gl.clear(gl.COLOR_BUFFER_BIT);
-	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	
-	gl.activeTexture(gl.TEXTURE3);
-	gl.bindTexture(gl.TEXTURE_2D, pictexture);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D, pictexture, 0);
-	gl.uniform1i(prog_pic_show.samp, 4);
-	gl.clear(gl.COLOR_BUFFER_BIT);
-	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, aPicTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 	drawPic();
-	} else {
-	$("#imageinfo").html("No image loaded!");
-	}
     }
+
+    function loadTextureDisplay() {
+    	gl.viewport(0,0,m,m);
+	    gl.activeTexture(gl.TEXTURE5);
+        gl.bindTexture(gl.TEXTURE_2D, aPicTexture);
+        //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
+        gl.RGB, gl.UNSIGNED_BYTE, texturepix);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        //console.log("loaded pic texture"); 
+        drawPic();
+	}
 
     var texturepix = new Uint8Array(3*m*m);
 
@@ -687,58 +676,60 @@ var imageValue = 'stretch';
 		}	
 	}
 	}
-	loadTexture();
+	loadTextureDisplay();
     }
 
-    /*function loadCircles() {
-	var colorArrayR = [];
-	var colorArrayG = [];
-	var colorArrayB = [];
-	for (var i = 0; i < 64; i++) {
-		colorArrayR[i] = Math.floor(255*Math.random());
-		colorArrayG[i] = Math.floor(255*Math.random());
-		colorArrayB[i] = Math.floor(255*Math.random());
+    var idTexturepix = new Float32Array(4*m*m);
+
+    function loadIdentity() {
+		for (var i = 0; i < m; i++) {
+		for (var j = 0; j < m; j++) {
+			idTexturepix[4*(i+512*j)] = i/512;
+			idTexturepix[4*(i+512*j)+1] = j/512;
+            idTexturepix[4*(i+512*j)+2] = 0;
+            idTexturepix[4*(i+512*j)+3] = 1;
+		}
+		}
+		loadTexture();
 	}
-	//fill in!
-    }*/
 
     function loadTexture() {
     	gl.viewport(0,0,m,m);
 	gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_2D, pictexture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texturepix);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, m, m, 0,
-        gl.RGB, gl.UNSIGNED_BYTE, texturepix);        
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0,
+        gl.RGBA, gl.FLOAT, idTexturepix);        
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, pictexture1);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.getImageData(0, 0, m, m));
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);        
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.FLOAT, null);        
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO1);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
         gl.TEXTURE_2D, pictexture1, 0);
-	gl.useProgram(prog_pic_show);
-	gl.uniform1i(prog_pic_show.samp, 3);
+	gl.useProgram(prog_simple);
+	gl.uniform1i(prog_simple.samp, 3);
+
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
 	
 	gl.activeTexture(gl.TEXTURE3);
 	gl.bindTexture(gl.TEXTURE_2D, pictexture);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, m, m, 0, gl.RGBA, gl.FLOAT, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.bindFramebuffer(gl.FRAMEBUFFER, picFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
         gl.TEXTURE_2D, pictexture, 0);
-	gl.uniform1i(prog_pic_show.samp, 4);
+	gl.uniform1i(prog_simple.samp, 4);
+    
+
 	gl.clear(gl.COLOR_BUFFER_BIT);
 	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-	drawPic();
     }
 
     var frozenvelocity = false;
@@ -770,15 +761,22 @@ var imageValue = 'stretch';
 	$("#velocitystatus").html("Dynamic");
 	$("#animstatus").html("Running");
 	loadInitialValues('random');
+    loadIdentity();
 	loadGrid();
     }
 	
     function resetimage(mode) {
 	if (mode=='grid') {
+    loadIdentity();
 	loadGrid();
 	drawPic();
 	} else {
-	loadTextureFromCanvas();
+    if(imageLoaded) {
+    loadImageToCanvas();
+    loadTextureFromCanvas();
+	} else {
+	$("#imageinfo").html("No image loaded!");
+    }
 	}
     }
 
@@ -821,15 +819,19 @@ var imageValue = 'stretch';
 	maincanvas.height = maincanvas.clientHeight;
 	invisibleCanvas = document.createElement("canvas");
 	ctx = invisibleCanvas.getContext('2d');
-        initShaders();
+    initShaders();
 	//loadImage('test.jpg');
+    
+    loadIdentity();
 	loadGrid();
+
 	tick();
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clearDepth(100);
 	$("#animstatus").click(handleAClick);
 	$("#velocitystatus").click(handleVClick);
-	$('input[name="radio-choice-1"]').change(function(){imageValue = this.value});
+	//$('input[name="radio-choice-1"]').change(function(){imageValue = this.value});
+    $("#fileLoader")[0].value = "";
 	
 	document.documentElement.onmouseup = pageMouseUp;
 	maincanvas.addEventListener("mouseleave",pageMouseUp,false);
@@ -870,7 +872,7 @@ Velocity field: <div id="velocitystatus" style="font-weight: bold;">Dynamic</div
 <br>
 Load your own image:
 <br>
-<input type="file" accept="image/*" onchange="loadImage(this.files)" oninput="loadImage(this.files)"></input>
+<input id="fileLoader" type="file" accept="image/*" onchange="loadImage(this.files)" oninput="loadImage(this.files)"></input>
 <fieldset data-role="controlgroup" data-type="horizontal" id="imageoptions" name="imageoptions">
    <legend>Image loading options:</legend>
    <input type="radio" name="radio-choice-1" id="radio-choice-1" value="stretch" checked="checked" />
